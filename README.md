@@ -58,10 +58,21 @@ uvicorn main:app --reload
 
 Health check: `GET http://localhost:8000/` → `{"status": "ok"}`
 
-Run the initial migration in the Supabase SQL editor:
+Run migrations in the Supabase SQL editor:
+
+- `backend/migrations/001_init.sql`
+- `backend/migrations/002_student_profiles.sql`
+
+#### Train risk predictor
+
+Uses a synthetic dataset (~1500 rows) augmented with the [Kaggle Students Performance](https://www.kaggle.com/datasets/spscientist/students-performance-in-exams) CSV when placed at `ml/predictor/dataset/kaggle_students_performance.csv`.
 
 ```bash
-# File: backend/migrations/001_init.sql
+cd ml/predictor
+python generate_synthetic_data.py   # build students.csv
+python train.py                     # saves backend/models/risk_predictor.pkl
+python evaluate.py                  # recall-prioritized metrics + SHAP report
+python shap_analysis.py             # optional feature attribution demo
 ```
 
 #### API routes
@@ -72,9 +83,14 @@ Run the initial migration in the Supabase SQL editor:
 | POST | `/auth/signup` | Register (student or mentor) |
 | POST | `/auth/login` | Login, returns JWT with role |
 | GET | `/auth/me` | Current user from JWT (Bearer token) |
+| GET | `/predict/` | Predict module status |
+| GET | `/predict/dashboard` | Student risk summary (JWT, student) |
+| GET | `/predict/students` | All students + scores (JWT, mentor) |
+| GET | `/predict/students/{id}` | Single student (JWT, mentor) |
+| GET | `/predict/cohort` | Cohort risk distribution (JWT, mentor) |
+| POST | `/predict/score` | Score raw features (JWT) |
 | GET | `/resume/` | Stub |
 | GET | `/chat/` | Stub |
-| GET | `/predict/` | Stub |
 | GET | `/schedule/` | Stub |
 | GET | `/intervention/` | Stub |
 
