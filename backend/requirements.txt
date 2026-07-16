@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+pydantic
+supabase
+python-dotenv
+anthropic
+scikit-learn
+xgboost
+shap
+sentence-transformers
+spacy
+chromadb
+PyMuPDF
+python-docx
+pandas
+numpy
