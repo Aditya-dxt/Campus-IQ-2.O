@@ -58,6 +58,28 @@ uvicorn main:app --reload
 
 Health check: `GET http://localhost:8000/` → `{"status": "ok"}`
 
+Run the initial migration in the Supabase SQL editor:
+
+```bash
+# File: backend/migrations/001_init.sql
+```
+
+#### API routes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Health check |
+| POST | `/auth/signup` | Register (student or mentor) |
+| POST | `/auth/login` | Login, returns JWT with role |
+| GET | `/auth/me` | Current user from JWT (Bearer token) |
+| GET | `/resume/` | Stub |
+| GET | `/chat/` | Stub |
+| GET | `/predict/` | Stub |
+| GET | `/schedule/` | Stub |
+| GET | `/intervention/` | Stub |
+
+Protected routes use `Authorization: Bearer <token>`. Mentor-only routes use the `RequireMentor` dependency from `backend/dependencies.py`.
+
 ### Frontend
 
 ```bash
