@@ -1,0 +1,18 @@
+Introduction to Quantum Computing 101
+Professor: Dr. Aris Thorne
+Semester: Fall 2026
+
+Chapter 1: The Basics of Qubits
+Unlike classical bits, which can be either 0 or 1, a quantum bit (qubit) can exist in a superposition of both states simultaneously. The state of a qubit is typically represented using Dirac notation, also known as bra-ket notation. The two basis states are |0⟩ and |1⟩. A general quantum state can be written as α|0⟩ + β|1⟩, where α and β are complex numbers such that the sum of their absolute squares equals 1 (|α|² + |β|² = 1). This is known as the normalization condition.
+
+Chapter 2: Quantum Entanglement
+Quantum entanglement is a physical phenomenon that occurs when a group of particles are generated, interact, or share spatial proximity in a way such that the quantum state of each particle of the group cannot be described independently of the state of the others, including when the particles are separated by a large distance. When two qubits are entangled, measuring the state of one instantly determines the state of the other. The most famous example of an entangled state is the Bell state. Albert Einstein famously referred to entanglement as "spooky action at a distance."
+
+Chapter 3: Quantum Logic Gates
+Classical computers use logic gates like AND, OR, and NOT. Quantum computers use quantum logic gates. These gates are represented by unitary matrices.
+- Pauli-X Gate: This is the quantum equivalent of the classical NOT gate. It flips the state of a qubit from |0⟩ to |1⟩, or |1⟩ to |0⟩.
+- Hadamard Gate (H-Gate): This gate puts a basis state into a state of perfect superposition. Applying an H-gate to |0⟩ results in a state that has an equal probability of being measured as 0 or 1.
+- CNOT Gate (Controlled-NOT): A two-qubit gate where the state of the second (target) qubit is flipped only if the first (control) qubit is in the state |1⟩. The CNOT gate is essential for creating entanglement.
+
+Chapter 4: Decoherence
+Quantum decoherence is the loss of quantum coherence. In quantum mechanics, particles such as electrons are described by a wave function, a mathematical representation of the quantum state of a system. When a quantum system is perfectly isolated, it maintains coherence. However, when it interacts with its environment, it becomes entangled with it, and its state appears to become classical. Decoherence is the biggest challenge in building practical quantum computers, as it destroys the delicate quantum states needed for computation.

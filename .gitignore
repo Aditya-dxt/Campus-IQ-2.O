@@ -42,3 +42,5 @@ npm-debug.log*
 
 # Chroma / local vector DB
 chroma_data/
+backend/chroma_db*/
+backend/suggested_questions_*.json
