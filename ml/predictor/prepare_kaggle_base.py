@@ -23,7 +23,7 @@ def load_kaggle_base(seed: int = 42) -> pd.DataFrame | None:
 
     raw = pd.read_csv(KAGGLE_PATH)
     required = {"math score", "reading score", "writing score"}
-    if not required.issubset(set(raw.columns.str.lower()) if False else raw.columns):
+    if not required.issubset(set(raw.columns)):
         # normalize column names
         raw.columns = [c.strip().lower() for c in raw.columns]
 

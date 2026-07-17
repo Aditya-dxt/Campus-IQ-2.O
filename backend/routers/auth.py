@@ -65,6 +65,12 @@ def signup(body: SignupRequest) -> AuthResponse:
             detail=f"Failed to create user profile: {exc}",
         ) from exc
 
+    if body.role == "student":
+        try:
+            supabase.table("student_profiles").insert({"user_id": user_id}).execute()
+        except Exception:
+            pass
+
     token = create_access_token(
         user_id=user_id,
         email=body.email,

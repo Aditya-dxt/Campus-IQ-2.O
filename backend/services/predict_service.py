@@ -4,20 +4,14 @@ from __future__ import annotations
 
 import hashlib
 from functools import lru_cache
-from pathlib import Path
 
 import pandas as pd
 
+from config import STUDENTS_DATASET_PATH
 from services.risk_predictor import FEATURE_NAMES, predict_risk
 from services.supabase_client import get_supabase_client
 
-DATASET_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "ml"
-    / "predictor"
-    / "dataset"
-    / "students.csv"
-)
+DATASET_PATH = STUDENTS_DATASET_PATH
 
 DEMO_NAMES = [
     ("Alex Chen", "Computer Science"),
@@ -46,7 +40,28 @@ def _stable_index(key: str, modulo: int) -> int:
     return int(digest[:8], 16) % modulo
 
 
+def _fetch_student_profile(user_id: str) -> dict | None:
+    try:
+        supabase = get_supabase_client()
+        result = (
+            supabase.table("student_profiles")
+            .select(", ".join(FEATURE_NAMES))
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if result.data:
+            return result.data[0]
+    except Exception:
+        pass
+    return None
+
+
 def features_for_user(user_id: str) -> dict[str, float | int]:
+    profile = _fetch_student_profile(user_id)
+    if profile:
+        return {name: profile[name] for name in FEATURE_NAMES}
+
     df = _load_dataset()
     row = df.iloc[_stable_index(user_id, len(df))]
     return {name: row[name] for name in FEATURE_NAMES}

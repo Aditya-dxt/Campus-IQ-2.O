@@ -5,8 +5,8 @@ export const MOCK_DELAY_MS = 450;
 export const delay = (ms = MOCK_DELAY_MS) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Swap USE_MOCKS to false when wiring real FastAPI endpoints. */
-export const USE_MOCKS = true;
+/** Set VITE_USE_MOCKS=false in .env to call the real FastAPI backend. */
+export const USE_MOCKS = import.meta.env.VITE_USE_MOCKS !== "false";
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8000",

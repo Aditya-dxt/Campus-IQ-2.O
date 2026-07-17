@@ -1,4 +1,10 @@
-"""Evaluate the trained risk predictor with recall-focused threshold tuning."""
+"""Evaluate the trained risk predictor with recall-focused threshold tuning.
+
+Computes precision, recall, F1, confusion matrix, SHAP feature importances,
+and demonstrates the top_factor function for individual students.
+Prioritizes recall >= 0.85 — if needed, adjusts the classification threshold
+and re-saves the model artifact.
+"""
 
 from pathlib import Path
 
@@ -22,7 +28,10 @@ MODEL_PATH = Path(__file__).resolve().parents[2] / "backend" / "models" / "risk_
 MIN_RECALL = 0.85
 
 
-def tune_threshold(y_true: np.ndarray, y_prob: np.ndarray, min_recall: float) -> float:
+def tune_threshold(
+    y_true: np.ndarray, y_prob: np.ndarray, min_recall: float
+) -> float:
+    """Find the threshold that maximizes F1 while maintaining recall >= min_recall."""
     best_threshold = 0.5
     best_f1 = -1.0
     for threshold in np.arange(0.10, 0.70, 0.01):
@@ -37,6 +46,7 @@ def tune_threshold(y_true: np.ndarray, y_prob: np.ndarray, min_recall: float) ->
 
 
 def evaluate() -> dict:
+    """Run full evaluation pipeline and print report."""
     if not MODEL_PATH.exists():
         raise FileNotFoundError(f"Model not found at {MODEL_PATH}. Run train.py first.")
 
@@ -53,6 +63,8 @@ def evaluate() -> dict:
     threshold = artifact.get("threshold", 0.5)
 
     y_prob = model.predict_proba(x_test)[:, 1]
+
+    # Re-tune threshold if recall is below target
     tuned_threshold = tune_threshold(y_test.to_numpy(), y_prob, MIN_RECALL)
     if tuned_threshold != threshold:
         print(f"Adjusted threshold {threshold:.2f} -> {tuned_threshold:.2f} for recall >= {MIN_RECALL}")
@@ -70,42 +82,50 @@ def evaluate() -> dict:
         "confusion_matrix": confusion_matrix(y_test, y_pred).tolist(),
     }
 
-    print("=" * 50)
-    print("RISK PREDICTOR EVALUATION REPORT")
-    print("=" * 50)
-    print(f"Model: {artifact.get('model_name', 'unknown')}")
-    print(f"Threshold: {threshold:.2f} (recall-prioritized)")
-    print(f"Precision: {metrics['precision']:.3f}")
-    print(f"Recall:    {metrics['recall']:.3f}")
-    print(f"F1 Score:  {metrics['f1']:.3f}")
-    print("\nConfusion Matrix (rows=actual, cols=predicted):")
-    print("              pred_0  pred_1")
+    # ── Print evaluation report ──────────────────────────────────────
+    print("=" * 60)
+    print("        CAMPUSIQ RISK PREDICTOR - EVALUATION REPORT")
+    print("=" * 60)
+    print(f"  Model:      {artifact.get('model_name', 'unknown')}")
+    print(f"  Threshold:  {threshold:.2f} (recall-prioritized, min={MIN_RECALL})")
+    print(f"  Test size:  {len(y_test)} samples")
+    print("-" * 60)
+    print(f"  Precision:  {metrics['precision']:.4f}")
+    print(f"  Recall:     {metrics['recall']:.4f}")
+    print(f"  F1 Score:   {metrics['f1']:.4f}")
+    print("-" * 60)
+    print("  Confusion Matrix (rows=actual, cols=predicted):")
+    print("                pred_safe  pred_at_risk")
     cm = np.array(metrics["confusion_matrix"])
-    print(f"  actual_0    {cm[0,0]:6d}  {cm[0,1]:6d}")
-    print(f"  actual_1    {cm[1,0]:6d}  {cm[1,1]:6d}")
-    print("\nClassification Report:")
+    print(f"    actual_safe     {cm[0, 0]:5d}         {cm[0, 1]:5d}")
+    print(f"    actual_risk     {cm[1, 0]:5d}         {cm[1, 1]:5d}")
+    print("-" * 60)
+    print("  Full Classification Report:")
     print(classification_report(y_test, y_pred, target_names=["not_at_risk", "at_risk"]))
 
+    # ── SHAP Feature Importances ─────────────────────────────────────
+    print("=" * 60)
+    print("        SHAP FEATURE IMPORTANCES (mean |SHAP|)")
+    print("=" * 60)
     explainer = build_explainer(model, x_test.iloc[:100])
-    if isinstance(explainer, tuple):
-        importances = get_mean_abs_contributions(
-            explainer[0], explainer[1], x_test.iloc[:200], FEATURE_COLUMNS
-        )
-    else:
-        sample_shap = explainer.shap_values(x_test.iloc[:200])
-        if isinstance(sample_shap, list):
-            sample_shap = sample_shap[1]
-        importances = {
-            name: float(np.abs(sample_shap[:, i]).mean())
-            for i, name in enumerate(FEATURE_COLUMNS)
-        }
-    print("\nSHAP Feature Importances (mean |SHAP|):")
+    explainer_kind, explainer_obj = explainer
+    importances = get_mean_abs_contributions(
+        explainer_kind, explainer_obj, x_test.iloc[:200], FEATURE_COLUMNS
+    )
     for name, val in sorted(importances.items(), key=lambda kv: kv[1], reverse=True):
-        print(f"  {name}: {val:.4f}")
+        bar = "#" * int(val * 40 / max(importances.values()))
+        print(f"  {name:35s} {val:.4f}  {bar}")
 
-    example = x_test.iloc[[0]]
-    top = get_top_factor(explainer, example, FEATURE_COLUMNS)
-    print(f"\nExample top_factor for {example.index[0]}: {top}")
+    # ── Example top_factor ───────────────────────────────────────────
+    print("\n" + "=" * 60)
+    print("        EXAMPLE TOP-FACTOR ATTRIBUTION")
+    print("=" * 60)
+    for i in range(min(5, len(x_test))):
+        example = x_test.iloc[[i]]
+        top = get_top_factor(explainer, example, FEATURE_COLUMNS)
+        risk_prob = y_prob[i]
+        label = "AT RISK" if risk_prob >= threshold else "SAFE"
+        print(f"  Student {example.index[0]:>5d}: risk={risk_prob:.3f} ({label:>7s}) | top_factor: {top}")
 
     return metrics
 

@@ -120,16 +120,20 @@ export default function StudentDashboard() {
               Open assistant →
             </Link>
           </div>
-          <div className="rounded-xl bg-surface border border-border/60 p-4">
-            <div className="flex items-center gap-2 text-xs text-ink-muted mb-2">
-              <BookOpen className="h-3.5 w-3.5" />
-              {data.recentChat.docTitle}
+          {data.recentChat ? (
+            <div className="rounded-xl bg-surface border border-border/60 p-4">
+              <div className="flex items-center gap-2 text-xs text-ink-muted mb-2">
+                <BookOpen className="h-3.5 w-3.5" />
+                {data.recentChat.docTitle}
+              </div>
+              <p className="text-sm font-medium text-ink">{data.recentChat.question}</p>
+              <p className="text-sm text-ink-muted mt-2 line-clamp-2">
+                {data.recentChat.preview}
+              </p>
             </div>
-            <p className="text-sm font-medium text-ink">{data.recentChat.question}</p>
-            <p className="text-sm text-ink-muted mt-2 line-clamp-2">
-              {data.recentChat.preview}
-            </p>
-          </div>
+          ) : (
+            <p className="text-sm text-ink-muted">No recent study chats yet.</p>
+          )}
         </section>
       </div>
     </div>
