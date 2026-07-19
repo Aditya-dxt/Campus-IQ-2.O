@@ -78,9 +78,27 @@ def score_features(body: ScoreRequest, current_user: CurrentUser):
     _ensure_model()
     features = body.model_dump()
     result = predict_risk(features)
+
+    # Persist the prediction to the risk_scores table
+    saved = False
+    try:
+        from services.supabase_client import get_supabase_client
+        supabase = get_supabase_client()
+        supabase.table("risk_scores").insert({
+            "user_id": current_user["sub"],
+            "academic_risk": result["academic_risk"],
+            "placement_readiness": result["placement_readiness"],
+            "top_factor": result.get("top_factor"),
+        }).execute()
+        saved = True
+    except Exception as exc:
+        print(f"Warning: failed to persist risk score to DB: {exc}")
+
     return {
         "features": features,
         "prediction": result,
         "requested_by": current_user["sub"],
         "role": current_user.get("role"),
+        "saved_to_db": saved,
     }
+
