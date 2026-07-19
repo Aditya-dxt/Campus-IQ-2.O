@@ -1,11 +1,10 @@
+import os
+import sys
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import CORS_ORIGINS
 from routers import auth, chat, intervention, predict, resume, schedule
-
-import sys
-from pathlib import Path
 
 # Add automatic model download check on startup
 models_dir = Path(__file__).resolve().parent / "models"
@@ -22,9 +21,13 @@ if not model_file.exists() or model_file.stat().st_size < 1024**3:
 
 app = FastAPI(title="CampusIQ API")
 
+# Parse CORS_ORIGINS from env
+raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

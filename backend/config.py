@@ -16,11 +16,7 @@ JWT_SECRET = os.getenv("JWT_SECRET", "")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "60"))
 
-CORS_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "*").split(",")
-    if origin.strip()
-]
+
 
 RISK_MODEL_PATH = Path(
     os.getenv("RISK_MODEL_PATH", BACKEND_ROOT / "models" / "risk_predictor.pkl")
