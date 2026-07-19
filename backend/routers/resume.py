@@ -3,11 +3,13 @@
 Accepts resume and JD text, calls the resume_scorer service,
 logs the result to the Supabase `resumes` table.
 """
-from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
+import tempfile
+from pathlib import Path
+from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form
+from pydantic import BaseModel
 
 from dependencies import CurrentUser
-from services.resume_scorer import score_resume
+from services.resume_scorer import score_resume, extract_text
 from services.supabase_client import get_supabase_client
 
 router = APIRouter(prefix="/resume", tags=["resume"])
@@ -16,18 +18,6 @@ router = APIRouter(prefix="/resume", tags=["resume"])
 # ---------------------------------------------------------------------------
 # Request / Response Models
 # ---------------------------------------------------------------------------
-
-class ResumeScoreRequest(BaseModel):
-    """Request body for resume scoring."""
-    resume_text: str = Field(
-        ..., min_length=50, max_length=50000,
-        description="Plain text of the student's resume (min 50 chars)."
-    )
-    jd_text: str = Field(
-        ..., min_length=20, max_length=50000,
-        description="Plain text of the Job Description to compare against."
-    )
-
 
 class ResumeScoreResponse(BaseModel):
     """Structured response from the resume scorer."""
@@ -48,7 +38,7 @@ def resume_root():
     return {
         "status": "ok",
         "endpoints": [
-            "POST /resume/score  — Score resume text against a JD",
+            "POST /resume/score  — Score resume file against a JD",
             "GET  /resume/history — View past resume scores (student only)",
         ],
     }
@@ -59,15 +49,39 @@ def resume_root():
     response_model=ResumeScoreResponse,
     status_code=status.HTTP_200_OK,
 )
-def score_resume_endpoint(body: ResumeScoreRequest, current_user: CurrentUser):
+async def score_resume_endpoint(
+    file: UploadFile = File(...),
+    job_description: str = Form(...),
+    current_user: CurrentUser = None,
+):
     """
     Score a student's resume against a Job Description.
 
+    - Extracts text from PDF/DOCX/TXT
     - Computes semantic similarity + keyword diff via the resume_scorer service.
     - Logs the result to the Supabase `resumes` table.
     """
+    if not job_description or len(job_description) < 20:
+         raise HTTPException(status_code=400, detail="Job description must be at least 20 characters.")
+    
+    # Save file to temp path to extract text
+    ext = Path(file.filename or "").suffix.lower()
+    temp_path = Path(tempfile.gettempdir()) / f"{current_user['sub']}_resume{ext}"
+    try:
+        contents = await file.read()
+        with open(temp_path, "wb") as f:
+            f.write(contents)
+            
+        resume_text = extract_text(str(temp_path))
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+            
+    if not resume_text or len(resume_text) < 50:
+         raise HTTPException(status_code=400, detail="Could not extract enough text from the resume file.")
+
     # Call the ML service
-    result = score_resume(body.resume_text, body.jd_text)
+    result = score_resume(resume_text, job_description)
 
     # Persist to Supabase
     saved = False

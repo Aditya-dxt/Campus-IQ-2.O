@@ -4,7 +4,7 @@ import * as chatApi from "../api/chat";
 import EmptyState from "./EmptyState";
 import LoadingState from "./LoadingState";
 
-export default function ChatWindow({ documents, selectedDocId, onSelectDoc }) {
+export default function ChatWindow({ selectedDocId }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [suggestions, setSuggestions] = useState([]);
@@ -13,11 +13,13 @@ export default function ChatWindow({ documents, selectedDocId, onSelectDoc }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {
+    if (!selectedDocId) return;
     chatApi
-      .getSuggestedQuestions()
-      .then(setSuggestions)
+      .getSuggestedQuestions(selectedDocId)
+      .then((res) => setSuggestions(res.suggested_questions || []))
+      .catch((err) => console.error(err))
       .finally(() => setLoadingSuggestions(false));
-  }, []);
+  }, [selectedDocId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,9 +38,19 @@ export default function ChatWindow({ documents, selectedDocId, onSelectDoc }) {
         {
           role: "assistant",
           content: reply.answer,
-          source: reply.source,
-          id: reply.id,
+          source: (reply.snippets && reply.snippets.length > 0) ? reply.snippets[0] : null,
+          id: reply.feedback_id || `temp-${Date.now()}`,
           feedback: null,
+        },
+      ]);
+    } catch (err) {
+      console.error(err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Sorry, I encountered an error. Please try again.",
+          id: `err-${Date.now()}`,
         },
       ]);
     } finally {
@@ -47,35 +59,19 @@ export default function ChatWindow({ documents, selectedDocId, onSelectDoc }) {
   };
 
   const handleFeedback = async (messageId, thumbs) => {
-    await chatApi.submitFeedback({ messageId, thumbs });
-    setMessages((prev) =>
-      prev.map((m) => (m.id === messageId ? { ...m, feedback: thumbs } : m)),
-    );
+    if (messageId.startsWith('temp-') || messageId.startsWith('err-')) return;
+    try {
+      await chatApi.submitFeedback({ messageId, thumbs });
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, feedback: thumbs } : m)),
+      );
+    } catch (err) {
+      console.error("Failed to submit feedback", err);
+    }
   };
 
   return (
     <div className="flex h-[calc(100vh-12rem)] min-h-[480px] flex-col rounded-2xl border border-border bg-surface-elevated overflow-hidden">
-      <div className="border-b border-border px-4 py-3">
-        <p className="text-xs font-medium uppercase tracking-wider text-ink-muted mb-2">
-          Study materials
-        </p>
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {documents.map((doc) => (
-            <button
-              key={doc.id}
-              type="button"
-              onClick={() => onSelectDoc(doc.id)}
-              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs transition-colors ${
-                selectedDocId === doc.id
-                  ? "bg-primary text-white"
-                  : "bg-surface text-ink-muted hover:text-ink"
-              }`}
-            >
-              {doc.title}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 && !sending && (
