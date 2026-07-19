@@ -22,7 +22,7 @@ if not model_file.exists() or model_file.stat().st_size < 1024**3:
 app = FastAPI(title="CampusIQ API")
 
 # Parse CORS_ORIGINS from env
-raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,https://campus-iq-2-o.vercel.app")
 origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
 
 app.add_middleware(
