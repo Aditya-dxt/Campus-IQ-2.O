@@ -40,6 +40,10 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Models
+backend/models/*.pkl
+backend/models/*.gguf
+
 # Chroma / local vector DB
 chroma_data/
 backend/chroma_db*/

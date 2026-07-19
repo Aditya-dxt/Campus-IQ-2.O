@@ -10,13 +10,13 @@ AI-powered academic & career copilot — full-stack college major project.
 | Backend | FastAPI, Python |
 | Database | Supabase (Postgres) |
 | Vector store | Chroma |
-| LLM | Claude API |
+| LLM | Local Offline LLM (Phi-3-mini, llama-cpp-python) |
 | ML | scikit-learn, XGBoost, SHAP, sentence-transformers, spaCy |
 
 ## Modules
 
 - Resume scoring
-- RAG study chatbot
+- RAG study chatbot (Fully offline using Local Phi-3-mini)
 - Academic risk & placement readiness prediction
 - Smart scheduler
 - Mentor intervention feedback loop

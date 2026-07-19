@@ -4,6 +4,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import CORS_ORIGINS
 from routers import auth, chat, intervention, predict, resume, schedule
 
+import sys
+from pathlib import Path
+
+# Add automatic model download check on startup
+models_dir = Path(__file__).resolve().parent / "models"
+model_file = models_dir / "phi3-mini.gguf"
+
+if not model_file.exists() or model_file.stat().st_size < 1024**3:
+    print("Local LLM model not found or invalid. Auto-downloading...")
+    # Import and run the download script
+    scripts_dir = Path(__file__).resolve().parent / "scripts"
+    sys.path.insert(0, str(scripts_dir))
+    import download_model
+    download_model.download_model()
+    sys.path.pop(0)
+
 app = FastAPI(title="CampusIQ API")
 
 app.add_middleware(

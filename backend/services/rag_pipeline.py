@@ -12,9 +12,8 @@ from pathlib import Path
 import chromadb
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
-import anthropic
-
-from config import ANTHROPIC_API_KEY, BACKEND_ROOT
+from config import BACKEND_ROOT
+from services.local_llm import generate as generate_llm
 
 # Initialize ChromaDB (local persistence)
 CHROMA_DB_DIR = BACKEND_ROOT / "chroma_db_v3"
@@ -35,12 +34,7 @@ class MockEmbeddingModel:
 embedding_model = MockEmbeddingModel()
 print("Using MockEmbeddingModel to bypass HuggingFace network blocks.")
 
-# Initialize Anthropic Client
-# Fallback gracefully if key is missing so the module still imports
-try:
-    anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-except Exception:
-    anthropic_client = None
+# Local LLM is loaded dynamically
 
 
 def _extract_text(file_path: str) -> str:
@@ -108,38 +102,24 @@ def ingest_document(file_path: str, doc_id: str = None) -> Dict[str, Any]:
         ids=ids
     )
     
-    # Generate suggested questions (Mock if API key missing)
-    suggested_questions = []
-    if anthropic_client and ANTHROPIC_API_KEY:
-        try:
-            # Use the first couple of chunks to get a sense of the document
-            context_for_questions = "\n".join(chunks[:3])
-            prompt = f"Based on the following document excerpts, generate 3 to 4 insightful study questions that a student could ask to test their understanding. Return ONLY a JSON array of strings (e.g. [\"question 1\", \"question 2\"]).\n\nExcerpts:\n{context_for_questions}"
-            
-            response = anthropic_client.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=300,
-                temperature=0.5,
-                system="You are an educational assistant. Output strictly valid JSON arrays containing only strings.",
-                messages=[{"role": "user", "content": prompt}]
-            )
-            content = response.content[0].text.strip()
-            # Try to parse the JSON
-            import re
-            json_match = re.search(r'\[.*\]', content, re.DOTALL)
-            if json_match:
-                suggested_questions = json.loads(json_match.group(0))
-            else:
-                suggested_questions = json.loads(content)
-        except Exception as e:
-            print(f"Failed to generate suggested questions: {e}")
-            suggested_questions = ["What are the main topics discussed in this document?"]
-    else:
-        # Fallback if no API key
+    # Generate suggested questions using local LLM
+    try:
+        context_for_questions = "\n".join(chunks[:3])
+        prompt = (
+            f"<|user|>\nBased on the following document excerpts, generate 3 to 4 insightful study questions that a student could ask to test their understanding. Return ONLY a JSON array of strings (e.g. [\"question 1\", \"question 2\"]).\n\nExcerpts:\n{context_for_questions}<|end|>\n<|assistant|>"
+        )
+        content = generate_llm(prompt, max_tokens=300)
+        import re
+        json_match = re.search(r'\[.*\]', content, re.DOTALL)
+        if json_match:
+            suggested_questions = json.loads(json_match.group(0))
+        else:
+            suggested_questions = json.loads(content)
+    except Exception as e:
+        print(f"Failed to generate suggested questions: {e}")
         suggested_questions = [
             "Can you summarize the key points of this document?",
-            "What is the main thesis or argument presented?",
-            "How does this material relate to the broader course topics?"
+            "What is the main thesis or argument presented?"
         ]
         
     # In a real system, we'd save these questions to a database tied to doc_id.
@@ -193,46 +173,19 @@ def ask_question(doc_id: str, question: str) -> Dict[str, Any]:
         context += f"--- Excerpt {i+1} ---\n{chunk}\n\n"
         
     system_prompt = (
-        "You are an AI Study Assistant helping a student. You will be provided with excerpts from the student's notes.\n\n"
-        "CRITICAL INSTRUCTIONS:\n"
-        "1. You MUST answer the user's question ONLY using the information present in the provided excerpts.\n"
-        "2. If the answer to the question is not contained within the excerpts, you MUST reply exactly with 'not found in your notes'. Do not apologize, do not elaborate, do not use outside knowledge.\n"
-        "3. Do not make up information or hallucinate facts."
+        "You are a helpful study assistant. Answer the user's question using ONLY the provided excerpts.\n"
+        "If the excerpts contain the answer, provide a clear and concise response.\n"
+        "If the excerpts do NOT contain the answer, you must reply with exactly: 'not found in your notes'."
     )
     
-    user_prompt = f"Question: {question}\n\nExcerpts:\n{context}"
+    prompt = f"<|user|>\n{system_prompt}\n\nQuestion: {question}\n\nExcerpts:\n{context}<|end|>\n<|assistant|>"
     
-    # 4. Call Claude API
-    answer = "not found in your notes" # Default
-    
-    if anthropic_client and ANTHROPIC_API_KEY:
-        try:
-            response = anthropic_client.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=500,
-                temperature=0.0, # Zero temperature for strictest factuality
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}]
-            )
-            answer = response.content[0].text.strip()
-        except Exception as e:
-            print(f"Error calling Claude API: {e}")
-            answer = "Error: Could not reach LLM service."
-    else:
-        # Mock behavior for testing when API key is missing
-        # We simulate the guardrail logic loosely for the eval script
-        question_lower = question.lower()
-        context_lower = context.lower()
-        
-        # Super naive matching just to make the test script run without an API key
-        # In reality, this relies entirely on Claude.
-        keywords = question_lower.replace("what", "").replace("is", "").replace("the", "").replace("who", "").split()
-        keywords = [k for k in keywords if len(k) > 3]
-        
-        if any(k in context_lower for k in keywords) and len(keywords) > 0:
-            answer = f"[Mocked Answer] Based on the notes, relevant information was found regarding your question. (Snippet: {retrieved_chunks[0][:50]}...)"
-        else:
-            answer = "not found in your notes"
+    # 4. Call Local LLM
+    try:
+        answer = generate_llm(prompt, max_tokens=500)
+    except Exception as e:
+        print(f"Error calling local LLM: {e}")
+        answer = "Error: Could not reach local LLM service."
             
     return {
         "answer": answer,

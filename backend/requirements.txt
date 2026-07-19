@@ -5,7 +5,8 @@ pydantic[email]
 PyJWT
 supabase
 python-dotenv
-anthropic
+llama-cpp-python
+huggingface-hub
 scikit-learn
 xgboost
 shap

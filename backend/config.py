@@ -10,7 +10,6 @@ REPO_ROOT = BACKEND_ROOT.parent
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 JWT_SECRET = os.getenv("JWT_SECRET", "")
