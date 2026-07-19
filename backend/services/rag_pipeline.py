@@ -175,7 +175,14 @@ def ask_question(doc_id: str, question: str) -> Dict[str, Any]:
     system_prompt = (
         "You are a helpful study assistant. Answer the user's question using ONLY the provided excerpts.\n"
         "If the excerpts contain the answer, provide a clear and concise response.\n"
-        "If the excerpts do NOT contain the answer, you must reply with exactly: 'not found in your notes'."
+        "If the excerpts do NOT contain the answer, you must reply with exactly: 'not found in your notes'.\n\n"
+        "EXAMPLES:\n"
+        "Excerpt: The mitochondria is the powerhouse of the cell.\n"
+        "Question: What is the powerhouse of the cell?\n"
+        "Answer: The mitochondria is the powerhouse of the cell.\n\n"
+        "Excerpt: The mitochondria is the powerhouse of the cell.\n"
+        "Question: Who was the first president of the United States?\n"
+        "Answer: not found in your notes"
     )
     
     prompt = f"<|user|>\n{system_prompt}\n\nQuestion: {question}\n\nExcerpts:\n{context}<|end|>\n<|assistant|>"
