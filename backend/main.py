@@ -1,6 +1,10 @@
 import os
 import sys
 from pathlib import Path
+
+from dotenv import load_dotenv
+load_dotenv()  # Load .env BEFORE any router/service imports read env vars
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -21,13 +25,10 @@ if not model_file.exists() or model_file.stat().st_size < 1024**3:
 
 app = FastAPI(title="CampusIQ API")
 
-# Parse CORS_ORIGINS from env
-raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,https://campus-iq-2-o.vercel.app")
-origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origin_regex=r"https://.*\.vercel\.app|https://.*\.ngrok-free\.dev",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

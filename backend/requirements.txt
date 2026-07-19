@@ -18,3 +18,4 @@ python-docx
 pandas
 numpy
 joblib
+email-validator 
