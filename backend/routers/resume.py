@@ -5,10 +5,10 @@ logs the result to the Supabase `resumes` table.
 """
 import tempfile
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from pydantic import BaseModel
 
-from dependencies import CurrentUser
+from dependencies import CurrentUser, get_current_user
 from services.resume_scorer import score_resume, extract_text
 from services.supabase_client import get_supabase_client
 
@@ -52,7 +52,7 @@ def resume_root():
 async def score_resume_endpoint(
     file: UploadFile = File(...),
     job_description: str = Form(...),
-    current_user: CurrentUser = None,
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Score a student's resume against a Job Description.

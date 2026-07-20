@@ -61,9 +61,14 @@ export default function Profile() {
       predictApi
         .getStudentDashboard()
         .then(setSummary)
+        .catch((err) => console.error("Failed to load dashboard stats:", err))
         .finally(() => setLoading(false));
     } else if (user?.role === "mentor") {
-      predictApi.getCohortStats().then(setCohort).finally(() => setLoading(false));
+      predictApi
+        .getCohortStats()
+        .then(setCohort)
+        .catch((err) => console.error("Failed to load cohort stats:", err))
+        .finally(() => setLoading(false));
     }
   }, [user?.role]);
 

@@ -19,3 +19,6 @@ pandas
 numpy
 joblib
 email-validator 
+python-multipart
+requests
+httpx

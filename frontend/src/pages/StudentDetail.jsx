@@ -31,8 +31,9 @@ export default function StudentDetail() {
         setStudent(s);
         setInterventions(ints);
         setActions(acts);
-        setForm((f) => ({ ...f, action: acts[0] || "" }));
+        setForm((f) => ({ ...f, action: acts[0]?.id || "" }));
       })
+      .catch((err) => console.error("Failed to load student data:", err))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -116,8 +117,8 @@ export default function StudentDetail() {
                 className="w-full rounded-xl border border-border bg-surface px-3 py-2.5 text-sm"
               >
                 {actions.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
+                  <option key={a.id} value={a.id}>
+                    {a.label}
                   </option>
                 ))}
               </select>
@@ -136,7 +137,7 @@ export default function StudentDetail() {
             <p className="text-xs text-ink-muted">
               Auto review date:{" "}
               <span className="font-medium text-ink">
-                {reviewDate.toISOString().slice(0, 10)}
+                {reviewDate.toLocaleDateString()}
               </span>{" "}
               (14 days from today)
             </p>

@@ -14,6 +14,7 @@ export default function ResumeScanner() {
     resumeApi
       .getResumeHistory()
       .then(setHistory)
+      .catch((err) => console.error("Failed to load history:", err))
       .finally(() => setHistoryLoading(false));
   }, []);
 
@@ -24,7 +25,7 @@ export default function ResumeScanner() {
       const data = await resumeApi.analyzeResume({ jobDescription });
       setResult(data);
     } catch (err) {
-      alert(err.message);
+      setResult({ error: err.message });
     } finally {
       setLoading(false);
     }
@@ -54,11 +55,18 @@ export default function ResumeScanner() {
             />
           )}
 
-          {result && (
+          {result && result.error && (
+            <div className="rounded-2xl border border-risk-high/30 bg-risk-high-bg p-6 text-risk-high">
+              <p className="font-medium">Analysis failed</p>
+              <p className="text-sm mt-1">{result.error}</p>
+            </div>
+          )}
+
+          {result && !result.error && (
             <div className="rounded-2xl border border-border bg-surface-elevated p-6 space-y-6 animate-fade-in">
               <div className="text-center py-4">
                 <p className="text-sm text-ink-muted">Match score</p>
-                <p className="text-5xl font-semibold text-primary mt-1">{result.score}</p>
+                <p className="text-5xl font-semibold text-primary">{result.score}</p>
                 <p className="text-xs text-ink-muted mt-1">out of 100</p>
               </div>
 

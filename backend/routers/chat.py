@@ -10,7 +10,8 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File, status
 from pydantic import BaseModel, Field
 
-from dependencies import CurrentUser
+from fastapi import Depends
+from dependencies import CurrentUser, get_current_user
 from config import BACKEND_ROOT
 from services.rag_pipeline import ingest_document, ask_question, suggest_questions
 from services.supabase_client import get_supabase_client
@@ -61,7 +62,7 @@ def chat_root():
 
 
 @router.post("/ingest", status_code=status.HTTP_201_CREATED)
-async def ingest_file(file: UploadFile = File(...), current_user: CurrentUser = None):
+async def ingest_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     """
     Upload a study document (PDF, DOCX, or TXT) for RAG ingestion.
 

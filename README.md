@@ -76,8 +76,9 @@ Health check: `GET http://localhost:8000/` → `{"status": "ok"}`
 ### Database Migrations
 Run the following migrations in your Supabase SQL editor to set up the schema:
 1. `backend/migrations/001_init.sql`
+2. `backend/migrations/002_student_profiles.sql`
 
-*(No other migrations are strictly required; the init script covers users, resumes, risk_scores, interventions, and chat_feedback).*
+*(The init script covers users, resumes, risk_scores, interventions, and chat_feedback. The student_profiles script is needed for ML inputs).*
 
 ### Frontend Setup (React)
 
