@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { generateSchedule, detailedPlanToBlocks } from "../api/schedule";
 import { getStudentDashboard } from "../api/predict";
 import { getCachedErpMarks } from "../api/erp";
@@ -19,6 +19,13 @@ export default function MySchedule() {
   const [error, setError] = useState("");
   const [hasGenerated, setHasGenerated] = useState(false);
   const [predictorHint, setPredictorHint] = useState("");
+  const [erpTest, setErpTest] = useState("");
+
+  const erpTests = useMemo(() => {
+    const c = getCachedErpMarks();
+    if (!c?.subjects?.length) return [];
+    return [...new Set(c.subjects.map((s) => s.test || "Unknown"))].sort();
+  }, [hasGenerated]);
 
   useEffect(() => {
     getStudentDashboard()
@@ -26,12 +33,14 @@ export default function MySchedule() {
         if (d?.hasData && d.topFactor) {
           setPredictorHint(`Predictor flag: ${d.topFactor} · risk ${d.academicRisk != null ? Math.round(d.academicRisk * 100) + "%" : ""}`);
         }
-        // Auto-prefill weak subjects from ERP marks if available (low marks → weak)
         const cached = getCachedErpMarks();
-        if (cached?.subjects?.length && weakSubjects.length === 1 && !weakSubjects[0].subject) {
-          const sorted = [...cached.subjects].sort((a, b) => a.percent - b.percent).slice(0, 6);
-          setWeakSubjects(sorted.map((s) => ({ subject: s.subject, score: String(Math.round(s.percent)) })));
-          setPredictorHint((prev) => prev ? `${prev} · ERP marks imported (${cached.subjects[0]?.test || "CT-1"})` : `ERP marks imported — ${sorted.length} subjects (lowest ${Math.round(sorted[0].percent)}%)`);
+        if (cached?.subjects?.length) {
+          if (cached.subjects[0]?.test) setErpTest(cached.subjects[0].test);
+          if (weakSubjects.length === 1 && !weakSubjects[0].subject) {
+            const sorted = [...cached.subjects].sort((a, b) => a.percent - b.percent).slice(0, 6);
+            setWeakSubjects(sorted.map((s) => ({ subject: s.subject, score: String(Math.round(s.percent)) })));
+            setPredictorHint((prev) => prev ? `${prev} · ERP marks imported (${cached.subjects[0]?.test || "CT-1"})` : `ERP marks imported — ${sorted.length} subjects (lowest ${Math.round(sorted[0].percent)}%)`);
+          }
         }
       })
       .catch(() => {})
@@ -97,12 +106,20 @@ export default function MySchedule() {
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-bold uppercase tracking-widest text-ink-muted">Your subjects & current scores (0-100)</h3>
             <div className="flex items-center gap-2">
+              {erpTests.length > 0 && (
+                <select value={erpTest} onChange={(e) => setErpTest(e.target.value)} className="rounded-lg border border-border bg-surface px-2 py-1 text-xs">
+                  {erpTests.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
               <button onClick={() => {
                 const cached = getCachedErpMarks();
                 if (!cached?.subjects?.length) return;
-                const sorted = [...cached.subjects].sort((a, b) => a.percent - b.percent).slice(0, 6);
+                let pool = cached.subjects;
+                if (erpTest) pool = pool.filter((s) => (s.test || "Unknown") === erpTest);
+                const sorted = [...pool].sort((a, b) => a.percent - b.percent).slice(0, 6);
+                if (!sorted.length) return;
                 setWeakSubjects(sorted.map((s) => ({ subject: s.subject, score: String(Math.round(s.percent)) })));
-              }} className="text-xs font-semibold text-primary hover:underline disabled:opacity-40 disabled:no-underline" disabled={!getCachedErpMarks()?.subjects?.length} title="Import low-scoring ERP subjects as weak subjects">↻ Import from ERP marks</button>
+              }} className="text-xs font-semibold text-primary hover:underline disabled:opacity-40 disabled:no-underline" disabled={!getCachedErpMarks()?.subjects?.length} title={erpTest ? `Import ${erpTest} low-scoring subjects` : "Import low-scoring ERP subjects"}>↻ Import {erpTest || "from ERP"}</button>
               <button onClick={() => setWeakSubjects([...weakSubjects, { subject: "", score: "" }])} className="text-xs font-semibold text-primary hover:underline">+ Add subject</button>
             </div>
           </div>
