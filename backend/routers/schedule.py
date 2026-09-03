@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from dependencies import CurrentUser
-from services.scheduler import generate_study_plan
+from services.scheduler import generate_detailed_plan, generate_study_plan
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -82,9 +82,14 @@ def generate_schedule(body: ScheduleRequest, current_user: CurrentUser):
     # Convert deadline models to dicts for the service
     deadlines_raw = [dl.model_dump() for dl in body.deadlines]
 
-    # Call the scheduler service
+    # Call the scheduler service — return both legacy plan and detailed blocks
     try:
         plan = generate_study_plan(
+            weak_subjects=body.weak_subjects,
+            deadlines=deadlines_raw,
+            available_hours=body.available_hours,
+        )
+        detailed = generate_detailed_plan(
             weak_subjects=body.weak_subjects,
             deadlines=deadlines_raw,
             available_hours=body.available_hours,
@@ -99,4 +104,5 @@ def generate_schedule(body: ScheduleRequest, current_user: CurrentUser):
         "student_id": current_user["sub"],
         "total_study_hours": total_hours,
         "plan": plan,
+        "detailed_plan": detailed,
     }

@@ -1,84 +1,118 @@
-"""Smart Scheduler Service
+"""Smart Scheduler Service — rule-based weekly study planner.
 
-A rule-based algorithm to generate weekly study plans for students.
-Prioritizes subjects based on academic risk (low scores) and urgency (upcoming deadlines).
+Prioritises subjects by (100 - score) + urgency bonus (50 / days_until_due)
+and distributes hours with diminishing-returns rotation.
 """
-import math
+
 from typing import Dict, List, Any
 
+DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+SHORT_MAP = {"Monday": "Mon", "Tuesday": "Tue", "Wednesday": "Wed", "Thursday": "Thu", "Friday": "Fri", "Saturday": "Sat", "Sunday": "Sun"}
+
+# Evening slot start hours for visual time blocks (18:00, 19:00, ...)
+BASE_HOUR = 18
+
+
+def _time_for_slot(idx: int) -> tuple[str, str]:
+    h = BASE_HOUR + idx
+    return f"{h:02d}:00", f"{h+1:02d}:00"
+
+
 def generate_study_plan(
-    weak_subjects: Dict[str, float], 
-    deadlines: List[Dict[str, Any]], 
-    available_hours: Dict[str, int]
+    weak_subjects: Dict[str, float],
+    deadlines: List[Dict[str, Any]],
+    available_hours: Dict[str, int],
 ) -> Dict[str, List[str]]:
+    """Legacy string plan — kept for backward compat. See generate_detailed_plan."""
+    detailed = generate_detailed_plan(weak_subjects, deadlines, available_hours)
+    # Convert detailed blocks back to legacy strings for existing callers
+    legacy: Dict[str, List[str]] = {}
+    for day, blocks in detailed.items():
+        legacy[day] = [f"1 Hour: {b['subject']} ({b['focus']})" for b in blocks]
+    return legacy
+
+
+def generate_detailed_plan(
+    weak_subjects: Dict[str, float],
+    deadlines: List[Dict[str, Any]],
+    available_hours: Dict[str, int],
+) -> Dict[str, List[Dict[str, Any]]]:
     """
-    Generates a weekly study plan.
-    
-    Args:
-        weak_subjects: Dict of subject name to current score (0-100). Example: {"Math": 45, "CS": 85}
-        deadlines: List of task dicts. Example: [{"subject": "Math", "task": "Midterm", "days_until_due": 3}]
-        available_hours: Dict of day to available hours. Example: {"Monday": 2, "Tuesday": 1}
-        
-    Returns:
-        Dict mapping day of the week to a list of study tasks.
+    Returns Dict[day, List[block]] where each block is:
+    { subject, task, focus, reason, reason_label, score, days_until_due, start, end, duration }
     """
-    
-    # 1. Calculate Priority Scores for each subject
-    # Base priority comes from how low the score is (Risk Factor)
-    subject_priorities = {}
+    subject_priorities: Dict[str, float] = {}
+    subject_scores: Dict[str, float] = {}
+    subject_tasks: Dict[str, List[str]] = {}
+    subject_deadline_days: Dict[str, int] = {}
+
     for subject, score in weak_subjects.items():
-        # A score of 40 yields a risk priority of 60
-        # A score of 95 yields a risk priority of 5
-        risk_factor = max(0.0, 100.0 - score)
+        risk_factor = max(0.0, 100.0 - float(score))
         subject_priorities[subject] = risk_factor
-        
-    # Add Urgency Factor for upcoming deadlines
-    # The closer the deadline, the higher the urgency bonus.
-    subject_tasks = {} # Keep track of tasks to mention them in the schedule
+        subject_scores[subject] = float(score)
+
     for dl in deadlines:
         subject = dl["subject"]
-        days = max(1, dl.get("days_until_due", 7))
+        days = max(1, int(dl.get("days_until_due", 7)))
         task_name = dl.get("task", "Assignment")
-        
-        # If the subject wasn't in weak_subjects, initialize it with a neutral base priority (e.g. 30)
         if subject not in subject_priorities:
             subject_priorities[subject] = 30.0
-            
-        # Add an urgency bonus. If due tomorrow (1 day), add 50 points. If due in 10 days, add 5 points.
+            subject_scores[subject] = 70.0
         urgency_bonus = 50.0 / days
         subject_priorities[subject] += urgency_bonus
-        
-        if subject not in subject_tasks:
-            subject_tasks[subject] = []
-        subject_tasks[subject].append(task_name)
-        
-    # 2. Sort subjects by total priority (Highest first)
+        subject_tasks.setdefault(subject, []).append(task_name)
+        # track nearest deadline for reason label
+        if subject not in subject_deadline_days or days < subject_deadline_days[subject]:
+            subject_deadline_days[subject] = days
+
+    if not subject_priorities:
+        # No data — return empty plan (frontend will show onboarding)
+        return {day: [] for day in available_hours.keys()}
+
+    # sort for stable initial order
     sorted_subjects = sorted(subject_priorities.items(), key=lambda x: x[1], reverse=True)
     if not sorted_subjects:
-        return {day: ["Free day! No urgent tasks or weak subjects detected."] for day in available_hours.keys() if available_hours[day] > 0}
-        
-    # 3. Time Allocation (Distribute available hours to top priority subjects)
-    study_plan = {day: [] for day in available_hours.keys()}
-    
-    # We will allocate hours one by one to the highest priority subject, 
-    # slightly decreasing its priority each time so we don't only study one subject all week.
-    
-    # Copy priorities for stateful reduction
+        return {day: [] for day in available_hours.keys()}
+
     current_priorities = dict(sorted_subjects)
-    
+    detailed: Dict[str, List[Dict[str, Any]]] = {day: [] for day in available_hours.keys()}
+
     for day, hours in available_hours.items():
-        for _ in range(hours):
-            # Find the subject that currently has the highest priority
+        for slot_idx in range(int(hours)):
             top_subject = max(current_priorities.items(), key=lambda x: x[1])[0]
-            
-            # Format the task description
             tasks = subject_tasks.get(top_subject, [])
-            focus_str = f"Focus on {', '.join(tasks)}" if tasks else "Review weak concepts"
-            
-            study_plan[day].append(f"1 Hour: {top_subject} ({focus_str})")
-            
-            # Reduce the priority of the subject we just studied so we rotate subjects
-            # (Diminishing returns for studying the same subject continuously)
+            has_deadline = top_subject in subject_deadline_days
+            score = subject_scores.get(top_subject, 70)
+
+            if has_deadline:
+                d = subject_deadline_days[top_subject]
+                focus = f"Focus on {', '.join(tasks)}"
+                reason = "deadline"
+                reason_label = f"Due in {d}d · {', '.join(tasks)}" if d > 1 else f"Due tomorrow · {', '.join(tasks)}"
+            elif score < 50:
+                focus = "Review weak concepts"
+                reason = "weak"
+                reason_label = f"Weak area · {int(score)}/100"
+            else:
+                focus = "Review weak concepts"
+                reason = "placement"
+                reason_label = f"Keep momentum · {int(score)}/100"
+
+            start, end = _time_for_slot(slot_idx)
+
+            detailed[day].append({
+                "subject": top_subject,
+                "task": tasks[0] if tasks else "Study",
+                "focus": focus,
+                "reason": reason,
+                "reason_label": reason_label,
+                "score": score,
+                "days_until_due": subject_deadline_days.get(top_subject),
+                "start": start,
+                "end": end,
+                "duration": "1h",
+            })
+            # diminishing returns
             current_priorities[top_subject] *= 0.6
-            
-    return study_plan
+
+    return detailed
