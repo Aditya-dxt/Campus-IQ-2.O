@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { generateSchedule, detailedPlanToBlocks } from "../api/schedule";
 import { getStudentDashboard } from "../api/predict";
+import { getCachedErpMarks } from "../api/erp";
 import ScheduleView from "../components/ScheduleView";
 import LoadingState from "../components/LoadingState";
 
@@ -24,6 +25,13 @@ export default function MySchedule() {
       .then((d) => {
         if (d?.hasData && d.topFactor) {
           setPredictorHint(`Predictor flag: ${d.topFactor} · risk ${d.academicRisk != null ? Math.round(d.academicRisk * 100) + "%" : ""}`);
+        }
+        // Auto-prefill weak subjects from ERP marks if available (low marks → weak)
+        const cached = getCachedErpMarks();
+        if (cached?.subjects?.length && weakSubjects.length === 1 && !weakSubjects[0].subject) {
+          const sorted = [...cached.subjects].sort((a, b) => a.percent - b.percent).slice(0, 6);
+          setWeakSubjects(sorted.map((s) => ({ subject: s.subject, score: String(Math.round(s.percent)) })));
+          setPredictorHint((prev) => prev ? `${prev} · ERP marks imported (${cached.subjects[0]?.test || "CT-1"})` : `ERP marks imported — ${sorted.length} subjects (lowest ${Math.round(sorted[0].percent)}%)`);
         }
       })
       .catch(() => {})
@@ -88,7 +96,15 @@ export default function MySchedule() {
         <div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-bold uppercase tracking-widest text-ink-muted">Your subjects & current scores (0-100)</h3>
-            <button onClick={() => setWeakSubjects([...weakSubjects, { subject: "", score: "" }])} className="text-xs font-semibold text-primary hover:underline">+ Add subject</button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => {
+                const cached = getCachedErpMarks();
+                if (!cached?.subjects?.length) return;
+                const sorted = [...cached.subjects].sort((a, b) => a.percent - b.percent).slice(0, 6);
+                setWeakSubjects(sorted.map((s) => ({ subject: s.subject, score: String(Math.round(s.percent)) })));
+              }} className="text-xs font-semibold text-primary hover:underline disabled:opacity-40 disabled:no-underline" disabled={!getCachedErpMarks()?.subjects?.length} title="Import low-scoring ERP subjects as weak subjects">↻ Import from ERP marks</button>
+              <button onClick={() => setWeakSubjects([...weakSubjects, { subject: "", score: "" }])} className="text-xs font-semibold text-primary hover:underline">+ Add subject</button>
+            </div>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {weakSubjects.map((w, i) => (

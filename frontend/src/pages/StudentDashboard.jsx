@@ -7,8 +7,10 @@ import {
   Sparkles,
   TrendingUp,
   ClipboardCheck,
+  Award,
 } from "lucide-react";
 import * as predictApi from "../api/predict";
+import * as erpApi from "../api/erp";
 import LoadingState from "../components/LoadingState";
 import { formatPercent, readinessLabel, riskBadgeClass, riskLabel } from "../utils/risk";
 
@@ -34,6 +36,7 @@ function SummaryCard({ icon: Icon, label, value, sub, badgeClass, empty }) {
 
 export default function StudentDashboard() {
   const [data, setData] = useState(null);
+  const [erpMarks, setErpMarks] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -43,6 +46,8 @@ export default function StudentDashboard() {
       .then(setData)
       .catch((e) => setError(e.response?.data?.detail || e.message))
       .finally(() => setLoading(false));
+    const cached = erpApi.getCachedErpMarks();
+    if (cached?.subjects?.length) setErpMarks(cached);
   }, []);
 
   if (loading) return <LoadingState message="Loading your dashboard…" />;
@@ -63,7 +68,6 @@ export default function StudentDashboard() {
         </p>
       </div>
 
-      {/* Banner when no real data yet */}
       {!hasRisk && (
         <div className="rounded-2xl border border-primary/30 bg-primary-soft px-5 py-4 text-sm text-primary space-y-1">
           <p className="font-medium">Your scores will appear here once you get started.</p>
@@ -74,7 +78,7 @@ export default function StudentDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4">
         <SummaryCard
           icon={ClipboardCheck}
           label="Attendance (ERP)"
@@ -82,6 +86,14 @@ export default function StudentDashboard() {
           sub={data.attendancePct != null ? (data.attendancePct >= 75 ? "Above 75% — good standing" : "Below 75% — needs attention") : "Sync ERP in Profile"}
           badgeClass={data.attendancePct != null ? (data.attendancePct >= 90 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : data.attendancePct >= 75 ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-red-50 text-red-700 border border-red-200") : undefined}
           empty={data.attendancePct == null}
+        />
+        <SummaryCard
+          icon={Award}
+          label="Avg marks (ERP)"
+          value={data.pastMarks != null ? `${Number(data.pastMarks).toFixed(1)}%` : "—"}
+          sub={data.pastMarks != null ? (data.pastMarks >= 60 ? "Strong — schedule focuses on weakest subjects" : "Needs focus — low subjects prioritized") : "Sync ERP in Profile (CT-1/ASG-1)"}
+          badgeClass={data.pastMarks != null ? (data.pastMarks >= 70 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : data.pastMarks >= 50 ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-red-50 text-red-700 border border-red-200") : undefined}
+          empty={data.pastMarks == null}
         />
         <SummaryCard
           icon={FileText}
@@ -113,6 +125,24 @@ export default function StudentDashboard() {
           empty={!data.schedulePreview.length}
         />
       </div>
+
+      {erpMarks?.subjects?.length > 0 && (
+        <section className="rounded-2xl border border-border bg-surface-elevated p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-medium text-ink">Subject-wise marks (ERP — {erpMarks.subjects[0]?.test || "CT-1/ASG-1"})</h2>
+            <span className="text-xs text-ink-muted">Avg {Number(data.pastMarks ?? erpMarks.avg ?? 0).toFixed(1)}% · synced {erpMarks.at ? new Date(erpMarks.at).toLocaleDateString() : ""}</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {erpMarks.subjects.slice(0, 12).map((s, i) => (
+              <div key={i} className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${s.percent < 50 ? "border-red-200 bg-red-50" : s.percent < 60 ? "border-amber-200 bg-amber-50" : "border-border bg-surface"}`}>
+                <span className="font-medium text-ink truncate pr-2">{s.subject}</span>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${s.percent < 50 ? "bg-red-600 text-white" : s.percent < 60 ? "bg-amber-500 text-white" : "bg-emerald-600 text-white"}`}>{s.percent}%</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-ink-muted mt-2">Lowest-scoring subjects are automatically prioritized when you generate <Link to="/schedule" className="text-primary underline">My Schedule</Link>.</p>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section className="rounded-2xl border border-border bg-surface-elevated p-5">
@@ -172,4 +202,3 @@ export default function StudentDashboard() {
     </div>
   );
 }
-
