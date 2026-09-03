@@ -52,7 +52,7 @@ export default function ResumeUploader({ onAnalyze, loading }) {
 
       <button
         type="submit"
-        disabled={loading || !jobDescription.trim()}
+        disabled={loading || !jobDescription.trim() || !file}
         className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {loading && <Loader2 className="h-4 w-4 animate-spin" />}

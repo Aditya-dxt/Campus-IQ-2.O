@@ -89,13 +89,18 @@ export default function ChatWindow({ selectedDocId }) {
             </div>
           ) : (
             <div key={msg.id || i} className="animate-fade-in space-y-2">
-              <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-sm text-ink">
+              <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-surface px-4 py-3 text-sm text-ink whitespace-pre-wrap leading-relaxed">
                 {msg.content}
               </div>
               {msg.source && (
-                <p className="max-w-[90%] text-xs text-ink-muted italic border-l-2 border-accent pl-3">
-                  Source: {msg.source}
-                </p>
+                <details className="max-w-[90%] text-xs text-ink-muted bg-surface/60 border border-border/70 rounded-xl px-3 py-2">
+                  <summary className="cursor-pointer font-medium text-ink/70 hover:text-ink select-none">
+                    View source notes excerpt
+                  </summary>
+                  <p className="mt-2 text-xs italic text-ink-muted/90 pl-2 border-l-2 border-primary/40 leading-normal">
+                    {msg.source}
+                  </p>
+                </details>
               )}
               <div className="flex gap-2">
                 <button

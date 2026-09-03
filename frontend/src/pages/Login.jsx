@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { GraduationCap } from "lucide-react";
 import { dashboardPath, useAuth } from "../context/AuthContext";
@@ -11,8 +11,13 @@ export default function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      navigate(dashboardPath(user.role), { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
+
   if (isAuthenticated && user) {
-    navigate(dashboardPath(user.role), { replace: true });
     return null;
   }
 
@@ -24,7 +29,7 @@ export default function Login() {
       const profile = await login({ email, password });
       navigate(dashboardPath(profile.role));
     } catch (err) {
-      setError(err.message || "Login failed");
+      setError(err.response?.data?.detail || err.message || "Login failed");
     } finally {
       setLoading(false);
     }

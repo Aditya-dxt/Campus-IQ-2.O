@@ -26,12 +26,13 @@ def init_llm():
         from llama_cpp import Llama
         
         print("Loading local Phi-3-mini model into memory...")
-        # n_ctx=4096 is standard for Phi-3-mini-4k
+        threads = max(2, (os.cpu_count() or 4))
         llm = Llama(
             model_path=str(model_path),
-            n_ctx=4096,
-            n_threads=max(1, os.cpu_count() - 1),  # Leave 1 thread free for OS
-            verbose=False # Keep logs clean
+            n_ctx=2048,
+            n_batch=512,
+            n_threads=threads,
+            verbose=False
         )
         MODEL_LOADED = True
         print("Model loaded successfully!")
@@ -53,8 +54,14 @@ def generate(prompt: str, max_tokens: int = 512) -> str:
         return "Error: Local LLM is not available. Please ensure the model is downloaded and llama-cpp-python is installed."
         
     try:
+        formatted_prompt = prompt
+        if "<|user|>" not in formatted_prompt:
+            formatted_prompt = f"<|user|>\n{formatted_prompt}<|end|>\n<|assistant|>\n"
+        elif not formatted_prompt.endswith("\n"):
+            formatted_prompt = formatted_prompt + "\n"
+
         output = llm(
-            prompt,
+            formatted_prompt,
             max_tokens=max_tokens,
             stop=["<|end|>", "<|user|>", "<|assistant|>"],
             echo=False

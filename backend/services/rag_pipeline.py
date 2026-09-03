@@ -31,8 +31,11 @@ class MockEmbeddingModel:
         # Generate random normalized vectors of dimension 384
         return np.random.randn(len(texts), 384)
 
-embedding_model = MockEmbeddingModel()
-print("Using MockEmbeddingModel to bypass HuggingFace network blocks.")
+try:
+    embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+except Exception as e:
+    print(f"Using MockEmbeddingModel to bypass HuggingFace network blocks: {e}")
+    embedding_model = MockEmbeddingModel()
 
 # Local LLM is loaded dynamically
 
@@ -102,28 +105,66 @@ def ingest_document(file_path: str, doc_id: str = None) -> Dict[str, Any]:
         ids=ids
     )
     
-    # Generate suggested questions using local LLM
-    try:
-        context_for_questions = "\n".join(chunks[:3])
-        prompt = (
-            f"<|user|>\nBased on the following document excerpts, generate 3 to 4 insightful study questions that a student could ask to test their understanding. Return ONLY a JSON array of strings (e.g. [\"question 1\", \"question 2\"]).\n\nExcerpts:\n{context_for_questions}<|end|>\n<|assistant|>"
-        )
-        content = generate_llm(prompt, max_tokens=300)
-        import re
-        json_match = re.search(r'\[.*\]', content, re.DOTALL)
-        if json_match:
-            suggested_questions = json.loads(json_match.group(0))
-        else:
-            suggested_questions = json.loads(content)
-    except Exception as e:
-        print(f"Failed to generate suggested questions: {e}")
-        suggested_questions = [
-            "Can you summarize the key points of this document?",
-            "What is the main thesis or argument presented?"
-        ]
+def _extract_fast_questions(text: str) -> List[str]:
+    """Extract quick, relevant study questions without blocking on LLM inference."""
+    import re
+    questions = []
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    topics = []
+    for line in lines[:25]:
+        if 4 < len(line) < 60 and not line.endswith(('.', ':', ';', ',')):
+            cleaned = re.sub(r'^[0-9.\-*#_ ]+', '', line).strip()
+            if cleaned and 2 <= len(cleaned.split()) <= 6:
+                topics.append(cleaned)
+    
+    if topics:
+        questions.append(f"Can you summarize the key concepts of {topics[0]}?")
+        if len(topics) > 1:
+            questions.append(f"What are the main details regarding {topics[1]}?")
+        if len(topics) > 2:
+            questions.append(f"How does {topics[2]} work according to the notes?")
+    
+    if len(questions) < 3:
+        questions.append("Can you summarize the key points of this document in bullet points?")
+        questions.append("What are the core definitions and concepts explained here?")
+        questions.append("What are the most important takeaways from these notes?")
+    
+    return questions[:4]
+
+
+def ingest_document(file_path: str, doc_id: str = None) -> Dict[str, Any]:
+    """
+    Extract text, chunk into ~300-500 token pieces, generate embeddings,
+    store in Chroma, and generate suggested questions with zero upload latency.
+    """
+    if not doc_id:
+        doc_id = str(uuid.uuid4())
         
-    # In a real system, we'd save these questions to a database tied to doc_id.
-    # For now, we'll store them in a local JSON file to simulate a DB.
+    text = _extract_text(file_path)
+    if not text:
+        raise ValueError("Could not extract any text from the document.")
+        
+    chunks = _chunk_text(text, chunk_size=300, overlap=40)
+    
+    # Generate embeddings locally
+    embeddings = embedding_model.encode(chunks).tolist()
+    
+    # Prepare data for Chroma
+    ids = [f"{doc_id}_chunk_{i}" for i in range(len(chunks))]
+    metadatas = [{"doc_id": doc_id, "chunk_index": i} for i in range(len(chunks))]
+    
+    # Store in ChromaDB
+    collection.add(
+        embeddings=embeddings,
+        documents=chunks,
+        metadatas=metadatas,
+        ids=ids
+    )
+    
+    # Instant suggested questions
+    suggested_questions = _extract_fast_questions(text)
+        
+    # Save questions to a local JSON file
     questions_file = BACKEND_ROOT / f"suggested_questions_{doc_id}.json"
     with open(questions_file, "w") as f:
         json.dump(suggested_questions, f)
@@ -141,22 +182,22 @@ def suggest_questions(doc_id: str) -> List[str]:
     if questions_file.exists():
         with open(questions_file, "r") as f:
             return json.load(f)
-    return ["What are the key concepts in this document?"]
+    return ["Can you summarize the key points of this document in bullet points?"]
 
 
 def ask_question(doc_id: str, question: str) -> Dict[str, Any]:
     """
-    Retrieve top-k chunks, call Claude API with strict anti-hallucination prompt,
+    Retrieve top relevant chunks, call local LLM with structured bullet-point prompt,
     and return the answer and source snippets.
     """
     # 1. Embed the query
     query_embedding = embedding_model.encode([question]).tolist()[0]
     
-    # 2. Retrieve top-k chunks
+    # 2. Retrieve top-2 chunks for faster processing
     results = collection.query(
         query_embeddings=[query_embedding],
         where={"doc_id": doc_id},
-        n_results=4
+        n_results=2
     )
     
     if not results['documents'] or not results['documents'][0]:
@@ -167,29 +208,24 @@ def ask_question(doc_id: str, question: str) -> Dict[str, Any]:
         
     retrieved_chunks = results['documents'][0]
     
-    # 3. Formulate the prompt with anti-hallucination guardrails
+    # 3. Formulate prompt with bullet-point formatting instructions
     context = ""
     for i, chunk in enumerate(retrieved_chunks):
         context += f"--- Excerpt {i+1} ---\n{chunk}\n\n"
         
     system_prompt = (
         "You are a helpful study assistant. Answer the user's question using ONLY the provided excerpts.\n"
-        "If the excerpts contain the answer, provide a clear and concise response.\n"
-        "If the excerpts do NOT contain the answer, you must reply with exactly: 'not found in your notes'.\n\n"
-        "EXAMPLES:\n"
-        "Excerpt: The mitochondria is the powerhouse of the cell.\n"
-        "Question: What is the powerhouse of the cell?\n"
-        "Answer: The mitochondria is the powerhouse of the cell.\n\n"
-        "Excerpt: The mitochondria is the powerhouse of the cell.\n"
-        "Question: Who was the first president of the United States?\n"
-        "Answer: not found in your notes"
+        "- Structure your answer with clear, organized bullet points.\n"
+        "- Use **bold text** for key terms and concepts.\n"
+        "- Keep explanations direct, concise, and easy to understand.\n"
+        "- If the excerpts do NOT contain the answer, reply with exactly: 'not found in your notes'."
     )
     
     prompt = f"<|user|>\n{system_prompt}\n\nQuestion: {question}\n\nExcerpts:\n{context}<|end|>\n<|assistant|>"
     
     # 4. Call Local LLM
     try:
-        answer = generate_llm(prompt, max_tokens=500)
+        answer = generate_llm(prompt, max_tokens=250)
     except Exception as e:
         print(f"Error calling local LLM: {e}")
         answer = "Error: Could not reach local LLM service."

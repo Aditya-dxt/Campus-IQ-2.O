@@ -18,14 +18,14 @@ export default function ResumeScanner() {
       .finally(() => setHistoryLoading(false));
   }, []);
 
-  const handleAnalyze = async ({ jobDescription }) => {
+  const handleAnalyze = async ({ file, jobDescription }) => {
     setLoading(true);
     setResult(null);
     try {
-      const data = await resumeApi.analyzeResume({ jobDescription });
+      const data = await resumeApi.analyzeResume({ file, jobDescription });
       setResult(data);
     } catch (err) {
-      setResult({ error: err.message });
+      setResult({ error: err.response?.data?.detail || err.message });
     } finally {
       setLoading(false);
     }

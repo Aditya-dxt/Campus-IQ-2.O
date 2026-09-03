@@ -186,12 +186,33 @@ def student_dashboard(user_id: str) -> dict:
         "email": "",
         "branch": None,
     }
-    record = _student_record(user)
+
+    # Try to get real student profile data from the DB
+    profile = _fetch_student_profile(user_id)
+
+    if profile:
+        # Real data exists — compute predictions from it
+        features = {name: profile[name] for name in FEATURE_NAMES}
+        prediction = predict_risk(features)
+        resume_score = _latest_resume_score(user_id)
+        return {
+            "resumeScore": resume_score,
+            "placementReadiness": prediction["placement_readiness"],
+            "academicRisk": prediction["academic_risk"],
+            "topFactor": prediction["top_factor"],
+            "hasData": True,
+            "schedulePreview": [],
+            "recentChat": None,
+        }
+
+    # No real data yet — return empty state, never fake CSV numbers
+    resume_score = _latest_resume_score(user_id)
     return {
-        "resumeScore": record["resumeScore"],
-        "placementReadiness": record["placementReadiness"],
-        "academicRisk": record["academicRisk"],
-        "topFactor": record["topFactor"],
+        "resumeScore": resume_score,  # None if no resume scanned yet
+        "placementReadiness": None,
+        "academicRisk": None,
+        "topFactor": None,
+        "hasData": False,
         "schedulePreview": [],
         "recentChat": None,
     }
