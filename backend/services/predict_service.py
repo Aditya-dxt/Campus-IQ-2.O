@@ -128,6 +128,8 @@ def student_dashboard(user_id: str) -> dict:
             "academicRisk": prediction["academic_risk"],
             "topFactor": prediction["top_factor"],
             "hasData": True,
+            "attendancePct": float(profile.get("attendance_pct")) if profile.get("attendance_pct") is not None else None,
+            "attendanceUpdatedAt": profile.get("updated_at"),
             "schedulePreview": [],
             "recentChat": None,
         }
@@ -139,6 +141,8 @@ def student_dashboard(user_id: str) -> dict:
         "academicRisk": None,
         "topFactor": None,
         "hasData": False,
+        "attendancePct": None,
+        "attendanceUpdatedAt": None,
         "schedulePreview": [],
         "recentChat": None,
     }

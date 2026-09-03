@@ -22,3 +22,4 @@ email-validator
 python-multipart
 requests
 httpx
+beautifulsoup4

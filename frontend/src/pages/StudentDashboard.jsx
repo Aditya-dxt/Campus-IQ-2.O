@@ -6,6 +6,7 @@ import {
   FileText,
   Sparkles,
   TrendingUp,
+  ClipboardCheck,
 } from "lucide-react";
 import * as predictApi from "../api/predict";
 import LoadingState from "../components/LoadingState";
@@ -73,7 +74,15 @@ export default function StudentDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+        <SummaryCard
+          icon={ClipboardCheck}
+          label="Attendance (ERP)"
+          value={data.attendancePct != null ? `${Number(data.attendancePct).toFixed(2)}%` : "—"}
+          sub={data.attendancePct != null ? (data.attendancePct >= 75 ? "Above 75% — good standing" : "Below 75% — needs attention") : "Sync ERP in Profile"}
+          badgeClass={data.attendancePct != null ? (data.attendancePct >= 90 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : data.attendancePct >= 75 ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-red-50 text-red-700 border border-red-200") : undefined}
+          empty={data.attendancePct == null}
+        />
         <SummaryCard
           icon={FileText}
           label="Resume match score"
