@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, LogOut, Save } from "lucide-react";
+import { Bell, LogOut, Save, GraduationCap, RefreshCw } from "lucide-react";
 import * as predictApi from "../api/predict";
+import * as erpApi from "../api/erp";
 import LoadingState from "../components/LoadingState";
 import { useAuth } from "../context/AuthContext";
 import { formatPercent, readinessLabel, riskLabel } from "../utils/risk";
@@ -42,6 +43,13 @@ export default function Profile() {
   const [cohort, setCohort] = useState(null);
   const [loading, setLoading] = useState(user?.role === "student");
   const [saved, setSaved] = useState(false);
+  // ERP connect state
+  const [erpId, setErpId] = useState("");
+  const [erpPassword, setErpPassword] = useState("");
+  const [erpLoading, setErpLoading] = useState(false);
+  const [erpResult, setErpResult] = useState(null);
+  const [erpError, setErpError] = useState("");
+  const [erpProfile, setErpProfile] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -63,6 +71,7 @@ export default function Profile() {
         .then(setSummary)
         .catch((err) => console.error("Failed to load dashboard stats:", err))
         .finally(() => setLoading(false));
+      erpApi.getErpProfile().then(setErpProfile).catch(() => {});
     } else if (user?.role === "mentor") {
       predictApi
         .getCohortStats()
@@ -71,6 +80,29 @@ export default function Profile() {
         .finally(() => setLoading(false));
     }
   }, [user?.role]);
+
+  const handleErpConnect = async (e) => {
+    e.preventDefault();
+    setErpError("");
+    setErpResult(null);
+    if (!erpId.trim() || !erpPassword) {
+      setErpError("Enter your PSIT ERP ID and password.");
+      return;
+    }
+    setErpLoading(true);
+    try {
+      const res = await erpApi.connectErp(erpId.trim(), erpPassword);
+      setErpResult(res);
+      setErpProfile({ attendance_pct: res.attendance.attendance_pct, updated_at: res.scraped_at });
+      // refresh dashboard summary
+      const d = await predictApi.getStudentDashboard();
+      setSummary(d);
+    } catch (err) {
+      setErpError(err.response?.data?.detail || err.message || "ERP sync failed");
+    } finally {
+      setErpLoading(false);
+    }
+  };
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -117,22 +149,63 @@ export default function Profile() {
           <h2 className="text-sm font-medium text-ink mb-3">Score summary</h2>
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
-              <p className="text-2xl font-semibold text-primary">{summary.resumeScore}</p>
+              <p className="text-2xl font-semibold text-primary">{summary.resumeScore ?? "—"}</p>
               <p className="text-xs text-ink-muted">Resume</p>
             </div>
             <div>
               <p className="text-2xl font-semibold text-ink">
-                {formatPercent(summary.placementReadiness)}
+                {summary.placementReadiness != null ? formatPercent(summary.placementReadiness) : "—"}
               </p>
-              <p className="text-xs text-ink-muted">{readinessLabel(summary.placementReadiness)}</p>
+              <p className="text-xs text-ink-muted">{summary.placementReadiness != null ? readinessLabel(summary.placementReadiness) : "Not assessed"}</p>
             </div>
             <div>
               <p className="text-2xl font-semibold text-ink">
-                {formatPercent(summary.academicRisk)}
+                {summary.academicRisk != null ? formatPercent(summary.academicRisk) : "—"}
               </p>
-              <p className="text-xs text-ink-muted">{riskLabel(summary.academicRisk)}</p>
+              <p className="text-xs text-ink-muted">{summary.academicRisk != null ? riskLabel(summary.academicRisk) : "Not assessed"}</p>
             </div>
           </div>
+          {erpProfile?.attendance_pct != null && (
+            <p className="text-xs text-ink-muted mt-3 text-center">ERP attendance: <span className="font-semibold text-ink">{erpProfile.attendance_pct}%</span> {erpProfile.updated_at ? `· synced ${new Date(erpProfile.updated_at).toLocaleDateString()}` : ""}</p>
+          )}
+        </div>
+      )}
+
+      {/* PSIT ERP Connect — authentic real-data sync */}
+      {user.role === "student" && (
+        <div className="rounded-2xl border border-border bg-surface-elevated p-6 space-y-4">
+          <div className="flex items-center gap-2">
+            <GraduationCap className="h-5 w-5 text-primary" />
+            <h2 className="text-base font-medium text-ink">Connect PSIT ERP — real attendance</h2>
+          </div>
+          <p className="text-xs text-ink-muted">Enter your <span className="font-medium text-ink">erp.psit.ac.in</span> credentials once. We scrape your Dashboard attendance (<span className="font-mono">TL | P | PF | Ab</span>) and update your CampusIQ profile. Credentials are <span className="font-medium">not stored</span> — re-enter to sync again. Your screenshot shows <span className="font-mono">TL-305 | P-280 | PF-8 | Ab-17 → 94.43%</span>.</p>
+          <form onSubmit={handleErpConnect} className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">ERP User ID / Roll No.</label>
+                <input value={erpId} onChange={(e) => setErpId(e.target.value)} placeholder="2401640100073" className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">ERP Password</label>
+                <input type="password" value={erpPassword} onChange={(e) => setErpPassword(e.target.value)} placeholder="••••••••" className="w-full rounded-xl border border-border bg-surface px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+            </div>
+            <button type="submit" disabled={erpLoading} className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-white hover:bg-primary-hover disabled:opacity-50">
+              <RefreshCw className={`h-4 w-4 ${erpLoading ? "animate-spin" : ""}`} />
+              {erpLoading ? "Syncing with ERP…" : "Sync my real attendance"}
+            </button>
+          </form>
+          {erpError && <p className="text-sm text-risk-high bg-risk-high-bg border border-risk-high/20 rounded-xl px-3 py-2">{erpError}</p>}
+          {erpResult && (
+            <div className="rounded-xl bg-surface border border-border p-4 text-sm">
+              <p className="font-medium text-ink">✓ Synced: {erpResult.attendance.attendance_pct}% attendance</p>
+              <p className="text-xs text-ink-muted mt-1">TL {erpResult.attendance.tl} | P {erpResult.attendance.present} | PF {erpResult.attendance.pf} | Ab {erpResult.attendance.absent} · With PF {erpResult.attendance.with_pf_pct}% · Without PF {erpResult.attendance.without_pf_pct}% {erpResult.attendance.section ? `· ${erpResult.attendance.section}` : ""}</p>
+              <p className="text-xs text-ink-muted mt-1">{erpResult.message}</p>
+            </div>
+          )}
+          {erpProfile && !erpResult && erpProfile.attendance_pct != null && (
+            <p className="text-xs text-ink-muted">Last synced attendance: <span className="font-semibold">{erpProfile.attendance_pct}%</span></p>
+          )}
         </div>
       )}
 

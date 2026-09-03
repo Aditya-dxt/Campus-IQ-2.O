@@ -8,7 +8,7 @@ load_dotenv()  # Load .env BEFORE any router/service imports read env vars
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, chat, intervention, predict, resume, schedule
+from routers import auth, chat, erp, intervention, predict, resume, schedule
 
 # Add automatic model download check on startup
 models_dir = Path(__file__).resolve().parent / "models"
@@ -40,6 +40,7 @@ app.include_router(chat.router)
 app.include_router(predict.router)
 app.include_router(schedule.router)
 app.include_router(intervention.router)
+app.include_router(erp.router)
 
 
 @app.get("/")
