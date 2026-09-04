@@ -48,9 +48,19 @@ export function getCachedErpMarks() {
     if (key) {
       const v = localStorage.getItem(key);
       if (v) return JSON.parse(v);
-      return null; // no fallback to generic when logged in — strict isolation
+      // one-time migration: generic cache from before per-user isolation
+      const generic = localStorage.getItem("erp_marks_cache");
+      if (generic) {
+        try {
+          const parsed = JSON.parse(generic);
+          if (parsed?.subjects?.length) {
+            localStorage.setItem(key, generic);
+            return parsed;
+          }
+        } catch {}
+      }
+      return null;
     }
-    // not logged in — fallback to legacy generic for backward compat only
     return JSON.parse(localStorage.getItem("erp_marks_cache") || "null");
   } catch { return null; }
 }
