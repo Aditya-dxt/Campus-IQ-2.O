@@ -358,6 +358,9 @@ def _fetch_marks(client: httpx.Client) -> dict[str, Any]:
                     if 'name="username"' in resp.text:
                         debug.append(f"POST {display} session expired via {list(payload.keys())[0]}")
                         break
+                    # Quick check: does response contain any subject-code-like text (BCS-052 etc)?
+                    has_subject_hint = bool(re.search(r"BCS|KCS|PSIT", resp.text, re.I))
+                    has_no_data = "no data available" in resp.text.lower()
                     p2 = _parse_marks_table(resp.text)
                     if p2:
                         for row in p2:
@@ -367,9 +370,18 @@ def _fetch_marks(client: httpx.Client) -> dict[str, Any]:
                                 row["percent"] = round(row["marks"] * 10, 2)
                                 row["max_marks"] = 10.0
                         all_marks.extend(p2)
-                        debug.append(f"POST {display} via {list(payload.keys())[0]}={list(payload.values())[0]!r} -> {form_action} found {len(p2)} rows")
+                        debug.append(f"POST {display} via {list(payload.keys())[0]}={str(list(payload.values())[0])[:30]!r}.. -> {form_action} found {len(p2)} rows has_subject_hint={has_subject_hint}")
                         tried = True
                         break
+                    # No rows — log hint for first variant to avoid spam, but capture if has_subject_hint
+                    if has_subject_hint:
+                        bcs_idx = resp.text.lower().find('bcs')
+                        snippet = re.sub(r'\s+', ' ', resp.text[max(0,bcs_idx-80):bcs_idx+120])[:180] if bcs_idx!=-1 else resp.text[:120]
+                        # avoid backslash in f-string
+                        debug.append(f"POST {display} via {list(payload.keys())[0]}={str(list(payload.values())[0])[:20]!r}.. -> {len(resp.text)} chars HAS subject hint but parser 0 rows snippet: {snippet[:120]}")
+                    elif payload == payload_variants[0]:
+                        preview2 = re.sub(r'\s+', ' ', resp.text[:350])[:180]
+                        debug.append(f"POST {display} via {list(payload.keys())[0]} -> {len(resp.text)} chars no_data={has_no_data} preview: {preview2}")
                     # Try JSON — handle object list and DataTables array-of-arrays
                     try:
                         j = resp.json()
