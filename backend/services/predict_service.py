@@ -36,6 +36,24 @@ def _fetch_student_profile(user_id: str) -> dict | None:
     return None
 
 
+def _live_counts(user_id: str) -> dict:
+    """Derive resume/chat counts live so dashboard unlocks without manual profile sync."""
+    counts = {}
+    try:
+        supabase = get_supabase_client()
+        r = supabase.table("resumes").select("id").eq("user_id", user_id).execute()
+        counts["resume_scans_count"] = len(r.data or [])
+    except Exception:
+        pass
+    try:
+        supabase = get_supabase_client()
+        r2 = supabase.table("chat_feedback").select("id").eq("user_id", user_id).execute()
+        counts["career_chat_activity_count"] = len(r2.data or [])
+    except Exception:
+        pass
+    return counts
+
+
 def _latest_resume_score(user_id: str) -> int | None:
     try:
         supabase = get_supabase_client()
@@ -180,10 +198,30 @@ def _fetch_user(user_id: str) -> dict | None:
 def student_dashboard(user_id: str) -> dict:
     profile = _fetch_student_profile(user_id)
     recent = _latest_study_chat(user_id)
+    live = _live_counts(user_id)
     if profile:
-        has_real_features = all(profile.get(name) is not None for name in FEATURE_NAMES)
+        # enrich profile with live counts + sensible defaults so model can run after resume/chat
+        enriched = dict(profile)
+        if enriched.get("resume_scans_count") is None and "resume_scans_count" in live:
+            enriched["resume_scans_count"] = live["resume_scans_count"]
+        if enriched.get("career_chat_activity_count") is None and "career_chat_activity_count" in live:
+            enriched["career_chat_activity_count"] = live["career_chat_activity_count"]
+        # derive mock_interview_score from latest resume score if missing
+        if enriched.get("mock_interview_score") is None:
+            try:
+                rs = _latest_resume_score(user_id)
+                if rs is not None:
+                    enriched["mock_interview_score"] = int(rs)
+            except Exception:
+                pass
+        # defaults for platform engagement if still null
+        if enriched.get("submission_rate") is None:
+            enriched["submission_rate"] = 70.0
+        if enriched.get("login_frequency") is None:
+            enriched["login_frequency"] = 5
+        has_real_features = all(enriched.get(name) is not None for name in FEATURE_NAMES)
         if has_real_features:
-            features = {name: profile[name] for name in FEATURE_NAMES}
+            features = {name: enriched[name] for name in FEATURE_NAMES}
             try:
                 prediction = predict_risk(features)
             except Exception:
