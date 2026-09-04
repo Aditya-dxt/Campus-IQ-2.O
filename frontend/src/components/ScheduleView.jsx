@@ -1,4 +1,4 @@
-import { reasonBadgeClass } from "../utils/risk";
+import { reasonBadgeClass, blockCardClass } from "../utils/risk";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const FULL = { Mon: "Monday", Tue: "Tuesday", Wed: "Wednesday", Thu: "Thursday", Fri: "Friday", Sat: "Saturday", Sun: "Sunday" };
@@ -12,7 +12,7 @@ export default function ScheduleView({ blocks, totalHours }) {
         </div>
         <h3 className="text-base font-semibold text-ink">No blocks yet</h3>
         <p className="mt-1 text-sm text-ink-muted max-w-md mx-auto">
-          Generate your week above — we’ll prioritize weak subjects and urgent deadlines into your available slots.
+          Generate your week above — important deadlines first, then regular todos, then weak subjects (≤60%).
         </p>
       </div>
     );
@@ -30,9 +30,13 @@ export default function ScheduleView({ blocks, totalHours }) {
   return (
     <div>
       {totalHours != null && (
-        <div className="flex gap-2 mb-4 text-xs">
+        <div className="flex flex-wrap gap-2 mb-3 text-xs items-center">
           <span className="rounded-full bg-primary-soft text-primary px-3 py-1 font-medium">{totalHours}h planned this week</span>
           <span className="rounded-full bg-surface-elevated border border-border px-3 py-1 text-ink-muted">{blocks.length} blocks · evening slots 18:00+</span>
+          <span className="hidden sm:inline-flex items-center gap-1.5 ml-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-purple-500" /> <span className="text-ink-muted">To-do</span>
+            <span className="inline-block w-2 h-2 rounded-full bg-amber-500 ml-2" /> <span className="text-ink-muted">Marks-based (≤60%)</span>
+          </span>
         </div>
       )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
@@ -52,9 +56,9 @@ export default function ScheduleView({ blocks, totalHours }) {
                 </div>
               ) : (
                 byDay[day].map((block) => (
-                  <div key={block.id} className="rounded-xl bg-surface p-2.5 border border-border/60 shadow-sm hover:shadow-md transition-shadow">
+                  <div key={block.id} className={`rounded-xl p-2.5 border shadow-sm hover:shadow-md transition-shadow ${blockCardClass(block.reason, block.kind)}`}>
                     <div className="flex items-center justify-between">
-                      <p className="text-[11px] font-mono text-ink-muted bg-surface-elevated border border-border px-1.5 py-0.5 rounded">
+                      <p className="text-[11px] font-mono text-ink-muted bg-white/70 border border-black/5 px-1.5 py-0.5 rounded">
                         {block.start} – {block.end}
                       </p>
                       <span className="text-[10px] text-ink-muted">{block.duration || "1h"}</span>
@@ -63,7 +67,7 @@ export default function ScheduleView({ blocks, totalHours }) {
                     {block.task && block.task !== "Study" && (
                       <p className="text-[11px] text-ink-muted truncate">{block.task}</p>
                     )}
-                    <span className={`inline-block mt-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none ${reasonBadgeClass(block.reason)}`}>
+                    <span className={`inline-block mt-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none border ${reasonBadgeClass(block.reason)}`}>
                       {block.reason_label || block.reason}
                     </span>
                     {block.focus && (
@@ -77,7 +81,7 @@ export default function ScheduleView({ blocks, totalHours }) {
         ))}
       </div>
       <p className="text-[11px] text-ink-muted mt-3">
-        Why this order? Weakest scores + nearest deadlines get earliest slots · diminishing-returns rotation prevents one-subject marathons.
+        <span className="inline-block w-2 h-2 rounded-full bg-purple-500 mr-1 align-middle" /> To-do (important + nearest deadlines) → <span className="inline-block w-2 h-2 rounded-full bg-sky-500 mx-1 align-middle" /> Regular todos → <span className="inline-block w-2 h-2 rounded-full bg-amber-500 mx-1 align-middle" /> Marks ≤60% (ASG-1/2, CT-1/2)
       </p>
     </div>
   );

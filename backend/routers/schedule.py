@@ -17,10 +17,12 @@ router = APIRouter(prefix="/schedule", tags=["schedule"])
 # ---------------------------------------------------------------------------
 
 class DeadlineItem(BaseModel):
-    """A single upcoming deadline."""
+    """A single upcoming deadline / todo note."""
     subject: str = Field(..., min_length=1, description="Subject name.")
     task: str = Field(default="Assignment", description="Task description.")
     days_until_due: int = Field(..., ge=1, le=365, description="Days until due.")
+    is_important: bool = Field(default=False, description="Marked as most important / urgent note.")
+    kind: str = Field(default="todo", description="todo vs regular — for colouring.")
 
 
 class ScheduleRequest(BaseModel):

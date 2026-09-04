@@ -28,6 +28,8 @@ export function detailedPlanToBlocks(detailedPlan) {
         reason_label: it.reason_label,
         focus: it.focus,
         score: it.score,
+        kind: it.kind || (it.reason?.includes("todo") || it.reason?.includes("deadline") ? "todo" : "marks"),
+        tier: it.tier,
       });
     }
   }

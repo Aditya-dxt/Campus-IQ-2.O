@@ -1,3 +1,24 @@
+export function reasonBadgeClass(reason) {
+  if (reason?.includes("todo-important")) return "bg-purple-100 text-purple-700 border border-purple-200";
+  if (reason?.includes("todo-urgent")) return "bg-orange-100 text-orange-700 border border-orange-200";
+  if (reason?.includes("todo")) return "bg-sky-100 text-sky-700 border border-sky-200";
+  if (reason?.includes("deadline")) return "bg-sky-100 text-sky-700 border border-sky-200";
+  if (reason?.includes("weak")) return "bg-red-50 text-red-700 border border-red-200";
+  if (reason?.includes("placement")) return "bg-primary-soft text-primary border border-primary/20";
+  return "bg-accent-soft text-ink-muted border border-border";
+}
+
+export function blockCardClass(reason, kind) {
+  // todo tasks — purple/sky tint; marks tasks — amber/red tint
+  if (kind === "todo" || reason?.includes("todo") || reason?.includes("deadline")) {
+    if (reason?.includes("important")) return "bg-purple-50 border-purple-200";
+    if (reason?.includes("urgent")) return "bg-orange-50 border-orange-200";
+    return "bg-sky-50 border-sky-200";
+  }
+  if (reason?.includes("weak")) return "bg-amber-50 border-amber-200";
+  return "bg-surface border-border/60";
+}
+
 export function riskLevel(value) {
   if (value < 0.35) return "low";
   if (value < 0.65) return "mid";
@@ -26,11 +47,4 @@ export function readinessLabel(value) {
 
 export function formatPercent(value) {
   return `${Math.round(value * 100)}%`;
-}
-
-export function reasonBadgeClass(reason) {
-  if (reason?.includes("deadline")) return "bg-risk-mid-bg text-risk-mid";
-  if (reason?.includes("weak")) return "bg-risk-high-bg text-risk-high";
-  if (reason?.includes("placement")) return "bg-primary-soft text-primary";
-  return "bg-accent-soft text-ink-muted";
 }
