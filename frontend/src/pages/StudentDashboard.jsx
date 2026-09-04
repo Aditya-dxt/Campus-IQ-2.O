@@ -290,9 +290,9 @@ export default function StudentDashboard() {
         <SummaryCard
           icon={Calendar}
           label="Up next"
-          value={data.schedulePreview[0]?.title || "—"}
-          sub={data.schedulePreview[0] ? `${data.schedulePreview[0].day} · ${data.schedulePreview[0].time}` : "No schedule yet"}
-          empty={!data.schedulePreview.length}
+          value={schedulePreview[0]?.title || "—"}
+          sub={schedulePreview[0] ? `${schedulePreview[0].day} · ${schedulePreview[0].time}` : "No schedule yet"}
+          empty={!schedulePreview.length}
         />
       </div>
 
