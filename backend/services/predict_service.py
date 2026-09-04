@@ -54,6 +54,29 @@ def _latest_resume_score(user_id: str) -> int | None:
     return None
 
 
+def _latest_study_chat(user_id: str) -> dict | None:
+    try:
+        supabase = get_supabase_client()
+        res = (
+            supabase.table("chat_feedback")
+            .select("doc_id, question, answer, created_at")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            r = res.data[0]
+            ans = (r.get("answer") or "").strip()
+            preview = ans[:140] + ("…" if len(ans) > 140 else "")
+            did = r.get("doc_id") or ""
+            title = did[:12] + "…" if len(did) > 12 else (did or "Study doc")
+            return {"docTitle": title, "question": r.get("question") or "", "preview": preview or "—", "created_at": r.get("created_at")}
+    except Exception:
+        pass
+    return None
+
+
 def _student_record(user: dict, profile: dict | None = None) -> dict | None:
     """Build a student record from real DB profile only. Returns None if no profile."""
     user_id = user["id"]
@@ -156,6 +179,7 @@ def _fetch_user(user_id: str) -> dict | None:
 
 def student_dashboard(user_id: str) -> dict:
     profile = _fetch_student_profile(user_id)
+    recent = _latest_study_chat(user_id)
     if profile:
         has_real_features = all(profile.get(name) is not None for name in FEATURE_NAMES)
         if has_real_features:
@@ -178,7 +202,7 @@ def student_dashboard(user_id: str) -> dict:
                     "year": profile.get("year"),
                     "section": profile.get("section") or (profile.get("erp_attendance") or {}).get("section"),
                     "schedulePreview": [],
-                    "recentChat": None,
+                    "recentChat": recent,
                 }
         resume_score = _latest_resume_score(user_id)
         return {
@@ -193,7 +217,7 @@ def student_dashboard(user_id: str) -> dict:
             "year": profile.get("year"),
             "section": profile.get("section") or (profile.get("erp_attendance") or {}).get("section"),
             "schedulePreview": [],
-            "recentChat": None,
+            "recentChat": recent,
         }
     resume_score = _latest_resume_score(user_id)
     return {
@@ -208,7 +232,7 @@ def student_dashboard(user_id: str) -> dict:
         "year": None,
         "section": None,
         "schedulePreview": [],
-        "recentChat": None,
+        "recentChat": recent,
     }
 
 
