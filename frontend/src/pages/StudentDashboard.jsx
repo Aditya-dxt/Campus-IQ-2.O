@@ -8,10 +8,13 @@ import {
   TrendingUp,
   ClipboardCheck,
   Award,
+  RefreshCw,
+  GraduationCap,
 } from "lucide-react";
 import * as predictApi from "../api/predict";
 import * as erpApi from "../api/erp";
 import LoadingState from "../components/LoadingState";
+import ErpConnectModal from "../components/ErpConnectModal";
 import { formatPercent, readinessLabel, riskBadgeClass, riskLabel } from "../utils/risk";
 
 function SummaryCard({ icon: Icon, label, value, sub, badgeClass, empty }) {
@@ -40,19 +43,37 @@ export default function StudentDashboard() {
   const [selectedTest, setSelectedTest] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [erpStatus, setErpStatus] = useState(null);
+  const [showErpModal, setShowErpModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshInfo, setRefreshInfo] = useState(null);
+
+  const loadDashboard = async () => {
+    try {
+      const d = await predictApi.getStudentDashboard();
+      setData(d);
+    } catch (e) {
+      setError(e.response?.data?.detail || e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    predictApi
-      .getStudentDashboard()
-      .then(setData)
-      .catch((e) => setError(e.response?.data?.detail || e.message))
-      .finally(() => setLoading(false));
+    loadDashboard();
     const cached = erpApi.getCachedErpMarks();
     if (cached?.subjects?.length) {
       setErpMarks(cached);
       const tests = [...new Set(cached.subjects.map((s) => s.test || "CT-1"))];
       if (tests.length) setSelectedTest(tests[0]);
     }
+    erpApi.getErpStatus().then((s) => {
+      setErpStatus(s);
+      if (!s.connected) {
+        // show one-time connect box after short delay for new account
+        setTimeout(() => setShowErpModal(true), 600);
+      }
+    }).catch(() => {});
   }, []);
 
   const tests = useMemo(() => {
@@ -76,6 +97,33 @@ export default function StudentDashboard() {
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
   }, [filteredSubjects]);
 
+  const handleErpConnect = async (erpId, password) => {
+    const res = await erpApi.connectErp(erpId, password);
+    setErpMarks({ subjects: res.marks.subjects, avg: res.marks.avg_percent, at: res.scraped_at });
+    const ts = [...new Set(res.marks.subjects.map((s) => s.test || "CT-1"))];
+    if (ts.length) setSelectedTest(ts[0]);
+    setErpStatus({ connected: true, erp_id: res.erp_id, last_synced_at: res.scraped_at, attendance_pct: res.attendance.attendance_pct });
+    setRefreshInfo({ type: "connect", msg: `Connected — attendance ${res.attendance.attendance_pct}%`, changes: [] });
+    await loadDashboard();
+    return res;
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setRefreshInfo(null);
+    try {
+      const res = await erpApi.refreshErp();
+      setErpMarks({ subjects: res.marks.subjects, avg: res.marks.avg_percent, at: res.scraped_at });
+      setErpStatus((prev) => ({ ...prev, last_synced_at: res.scraped_at, attendance_pct: res.attendance.attendance_pct }));
+      setRefreshInfo({ type: "refresh", msg: res.message, changes: res.changes || [], diff: res.diff });
+      await loadDashboard();
+    } catch (e) {
+      setRefreshInfo({ type: "error", msg: e.response?.data?.detail || e.message });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   if (loading) return <LoadingState message="Loading your dashboard…" />;
   if (error) return <p className="text-risk-high text-sm">{error}</p>;
   if (!data) return null;
@@ -85,14 +133,52 @@ export default function StudentDashboard() {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-semibold text-ink">Good to see you</h1>
-        <p className="text-ink-muted text-sm mt-1">
-          {hasRisk
-            ? "Here's a supportive snapshot of where you stand this week."
-            : "Complete your profile below to unlock your personalised risk scores."}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-ink">Good to see you</h1>
+          <p className="text-ink-muted text-sm mt-1">
+            {hasRisk
+              ? "Here's a supportive snapshot of where you stand this week."
+              : "Complete your profile below to unlock your personalised risk scores."}
+          </p>
+        </div>
+        {erpStatus?.connected ? (
+          <button onClick={handleRefresh} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface-elevated px-4 py-2 text-sm font-medium hover:bg-surface disabled:opacity-50">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            {refreshing ? "Refreshing…" : "Refresh from ERP"}
+          </button>
+        ) : (
+          <button onClick={() => setShowErpModal(true)} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover">
+            <GraduationCap className="h-4 w-4" />
+            Connect PSIT ERP
+          </button>
+        )}
       </div>
+
+      {refreshInfo && (
+        <div className={`rounded-xl border px-4 py-3 text-sm ${refreshInfo.type === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
+          <p className="font-medium">{refreshInfo.msg}</p>
+          {refreshInfo.changes?.length > 0 && (
+            <ul className="mt-1 text-xs list-disc ml-4 space-y-0.5">
+              {refreshInfo.changes.map((c, i) => <li key={i}>{c}</li>)}
+            </ul>
+          )}
+          {refreshInfo.diff && (refreshInfo.diff.attendance_pct != null || refreshInfo.diff.avg_marks != null) && (
+            <p className="text-xs mt-1 text-ink-muted">
+              {refreshInfo.diff.attendance_pct != null ? `Attendance Δ ${refreshInfo.diff.attendance_pct > 0 ? "+" : ""}${refreshInfo.diff.attendance_pct}%` : ""}
+              {refreshInfo.diff.attendance_pct != null && refreshInfo.diff.avg_marks != null ? " · " : ""}
+              {refreshInfo.diff.avg_marks != null ? `Marks Δ ${refreshInfo.diff.avg_marks > 0 ? "+" : ""}${refreshInfo.diff.avg_marks}%` : ""}
+            </p>
+          )}
+        </div>
+      )}
+
+      {erpStatus && (
+        <div className={`rounded-xl border px-4 py-2.5 text-xs flex items-center justify-between ${erpStatus.connected ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+          <span>{erpStatus.connected ? `ERP linked: ${erpStatus.erp_id} · last synced ${erpStatus.last_synced_at ? new Date(erpStatus.last_synced_at).toLocaleDateString() : "just now"}` : "ERP not linked — connect once to sync attendance & marks"}</span>
+          {!erpStatus.connected && <button onClick={() => setShowErpModal(true)} className="font-semibold underline">Connect now</button>}
+        </div>
+      )}
 
       {!hasRisk && (
         <div className="rounded-2xl border border-primary/30 bg-primary-soft px-5 py-4 text-sm text-primary space-y-1">
@@ -117,7 +203,7 @@ export default function StudentDashboard() {
           icon={Award}
           label="Avg marks (ERP)"
           value={testAvg != null ? `${testAvg.toFixed(1)}%` : data.pastMarks != null ? `${Number(data.pastMarks).toFixed(1)}%` : "—"}
-          sub={selectedTest ? `${selectedTest} average${erpMarks ? "" : " · sync for details"}` : data.pastMarks != null ? "Overall average" : "Sync ERP in Profile"}
+          sub={selectedTest ? `${selectedTest} average${erpMarks ? "" : " · sync for details"}` : data.pastMarks != null ? "Overall average" : "Connect ERP to sync"}
           badgeClass={testAvg != null ? (testAvg >= 70 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : testAvg >= 50 ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-red-50 text-red-700 border border-red-200") : undefined}
           empty={testAvg == null && data.pastMarks == null}
         />
@@ -182,14 +268,14 @@ export default function StudentDashboard() {
               </div>
             </>
           ) : (
-            <p className="text-sm text-ink-muted">No subjects found for {selectedTest}. If AT-2 was just added in ERP, re-sync in Profile.</p>
+            <p className="text-sm text-ink-muted">No subjects found for {selectedTest}. If AT-2 was just added in ERP, hit Refresh above.</p>
           )}
-          <p className="text-xs text-ink-muted mt-2">New tests (CT-2, AT-2 etc.) appear automatically after you re-sync — dropdown is built from your ERP&apos;s real test list.</p>
+          <p className="text-xs text-ink-muted mt-2">New tests (CT-2, AT-2 etc.) appear automatically after you hit Refresh — dropdown is built from your ERP&apos;s real test list.</p>
         </section>
       ) : (
         <section className="rounded-2xl border border-dashed border-border bg-surface-elevated p-5 text-center">
           <p className="text-sm font-medium text-ink">No ERP marks yet</p>
-          <p className="text-xs text-ink-muted mt-1">Sync your PSIT ERP in <Link to="/profile" className="text-primary underline">Profile → Connect PSIT ERP</Link> — CT-1 / AT-1 and future tests like AT-2 will appear here automatically.</p>
+          <p className="text-xs text-ink-muted mt-1">Hit <span className="font-medium text-ink">Connect PSIT ERP</span> above — CT-1 / ASG-1 and future tests like AT-2 will appear here after sync.</p>
         </section>
       )}
 
@@ -248,6 +334,8 @@ export default function StudentDashboard() {
           )}
         </section>
       </div>
+
+      <ErpConnectModal open={showErpModal} onClose={(ok) => setShowErpModal(false)} onConnect={handleErpConnect} />
     </div>
   );
 }
