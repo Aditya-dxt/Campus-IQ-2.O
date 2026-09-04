@@ -70,6 +70,7 @@ def erp_connect(body: ErpConnectRequest, current_user: CurrentUser):
             "subjects": data.get("marks", []),
             "avg_percent": avg_marks,
         },
+        "marks_debug": data.get("marks_debug", []),
         "scraped_at": data.get("scraped_at"),
         "note": "Credentials were not stored — re-enter to sync again after ERP updates. Low-scoring subjects will be prioritized when you generate your schedule.",
     }

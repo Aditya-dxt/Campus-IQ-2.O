@@ -197,10 +197,26 @@ export default function Profile() {
           </form>
           {erpError && <p className="text-sm text-risk-high bg-risk-high-bg border border-risk-high/20 rounded-xl px-3 py-2">{erpError}</p>}
           {erpResult && (
-            <div className="rounded-xl bg-surface border border-border p-4 text-sm">
-              <p className="font-medium text-ink">✓ Synced: {erpResult.attendance.attendance_pct}% attendance</p>
-              <p className="text-xs text-ink-muted mt-1">TL {erpResult.attendance.tl} | P {erpResult.attendance.present} | PF {erpResult.attendance.pf} | Ab {erpResult.attendance.absent} · With PF {erpResult.attendance.with_pf_pct}% · Without PF {erpResult.attendance.without_pf_pct}% {erpResult.attendance.section ? `· ${erpResult.attendance.section}` : ""}</p>
-              <p className="text-xs text-ink-muted mt-1">{erpResult.message}</p>
+            <div className="rounded-xl bg-surface border border-border p-4 text-sm space-y-2">
+              <p className="font-medium text-ink">✓ Synced: {erpResult.attendance.attendance_pct}% attendance {erpResult.marks?.subjects?.length ? `· ${erpResult.marks.subjects.length} marks` : ""}</p>
+              <p className="text-xs text-ink-muted">TL {erpResult.attendance.tl} | P {erpResult.attendance.present} | PF {erpResult.attendance.pf} | Ab {erpResult.attendance.absent} · With PF {erpResult.attendance.with_pf_pct}% · Without PF {erpResult.attendance.without_pf_pct}% {erpResult.attendance.section ? `· ${erpResult.attendance.section}` : ""}</p>
+              {erpResult.marks?.subjects?.length > 0 && (
+                <div className="rounded-lg border border-border bg-surface-elevated p-2">
+                  <p className="text-xs font-medium text-ink">Marks synced: {erpResult.marks.avg_percent != null ? `${erpResult.marks.avg_percent}% avg` : ""} — {[...new Set(erpResult.marks.subjects.map((s)=>s.test))].join(", ")}</p>
+                  <div className="mt-1 grid grid-cols-2 gap-1 text-xs">
+                    {erpResult.marks.subjects.slice(0, 6).map((s, i) => <span key={i} className="truncate">{s.subject}: {s.percent}% ({s.test})</span>)}
+                  </div>
+                  <p className="text-xs text-ink-muted mt-1">View all by test on Dashboard → test dropdown. Schedule will prioritize low %.</p>
+                </div>
+              )}
+              <p className="text-xs text-ink-muted">{erpResult.message}</p>
+              {(!erpResult.marks?.subjects?.length && erpResult.marks_debug?.length > 0) && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-ink-muted">No marks found — tap for debug</summary>
+                  <pre className="mt-1 whitespace-pre-wrap break-all bg-surface-elevated border border-border rounded p-2 text-[11px]">{erpResult.marks_debug.join("\n")}</pre>
+                  <p className="text-ink-muted mt-1">Your ERP shows “No data available” for CT-1/ASG-1 right now — that’s why. After PSIT publishes AT-2, re-sync and the dropdown will auto-add it. If marks exist but still not found, copy this debug and send to support.</p>
+                </details>
+              )}
             </div>
           )}
           {erpProfile && !erpResult && erpProfile.attendance_pct != null && (
