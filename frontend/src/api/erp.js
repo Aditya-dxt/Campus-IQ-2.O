@@ -5,15 +5,14 @@ function userCacheKey() {
     const u = JSON.parse(localStorage.getItem("campusiq_user") || "null");
     if (u?.id) return `erp_marks_cache_${u.id}`;
   } catch {}
-  return "erp_marks_cache";
+  return null;
 }
 
 function saveCache(payload) {
   try {
     const key = userCacheKey();
-    localStorage.setItem(key, JSON.stringify(payload));
-    // keep legacy key for backward compat
-    localStorage.setItem("erp_marks_cache", JSON.stringify(payload));
+    if (key) localStorage.setItem(key, JSON.stringify(payload));
+    // do NOT write generic key anymore — prevents cross-account leak
   } catch {}
 }
 
@@ -46,11 +45,21 @@ export async function getErpMarks() {
 export function getCachedErpMarks() {
   try {
     const key = userCacheKey();
-    const v = localStorage.getItem(key);
-    if (v) return JSON.parse(v);
+    if (key) {
+      const v = localStorage.getItem(key);
+      if (v) return JSON.parse(v);
+      return null; // no fallback to generic when logged in — strict isolation
+    }
+    // not logged in — fallback to legacy generic for backward compat only
     return JSON.parse(localStorage.getItem("erp_marks_cache") || "null");
   } catch { return null; }
 }
 export function isErpConnected() {
   try { return !!getCachedErpMarks()?.subjects?.length; } catch { return false; }
+}
+export function clearErpCacheForCurrentUser() {
+  try {
+    const key = userCacheKey();
+    if (key) localStorage.removeItem(key);
+  } catch {}
 }

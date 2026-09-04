@@ -43,6 +43,10 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
+    // do NOT clear per-user erp cache — each account keeps its own erp_marks_cache_<id>
+    // generic legacy key is cleared to prevent cross-account leak on shared device
+    try { localStorage.removeItem("erp_marks_cache"); } catch {}
+    try { localStorage.removeItem("erp_connected"); } catch {}
     setToken(null);
     setUser(null);
   };
