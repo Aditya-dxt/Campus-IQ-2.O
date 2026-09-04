@@ -11,12 +11,39 @@ export default function MySchedule() {
   const [weakSubjects, setWeakSubjects] = useState([{ subject: "", score: "" }]);
   const [deadlines, setDeadlines] = useState([]);
   const [hours, setHours] = useState({ Monday: 0, Tuesday: 0, Wednesday: 0, Thursday: 0, Friday: 0, Saturday: 0, Sunday: 0 });
-  const [blocks, setBlocks] = useState([]);
-  const [totalHours, setTotalHours] = useState(0);
+  const [blocks, setBlocks] = useState(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem("campusiq_user") || "null");
+      if (u?.id) {
+        const raw = localStorage.getItem(`schedule_cache_${u.id}`);
+        if (raw) {
+          const p = JSON.parse(raw);
+          if (p?.blocks?.length) return p.blocks;
+        }
+      }
+    } catch {}
+    return [];
+  });
+  const [totalHours, setTotalHours] = useState(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem("campusiq_user") || "null");
+      if (u?.id) {
+        const raw = localStorage.getItem(`schedule_cache_${u.id}`);
+        if (raw) return JSON.parse(raw)?.totalHours || 0;
+      }
+    } catch {}
+    return 0;
+  });
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState("");
-  const [hasGenerated, setHasGenerated] = useState(false);
+  const [hasGenerated, setHasGenerated] = useState(() => {
+    try {
+      const u = JSON.parse(localStorage.getItem("campusiq_user") || "null");
+      if (u?.id) return !!JSON.parse(localStorage.getItem(`schedule_cache_${u.id}`) || "null")?.blocks?.length;
+    } catch {}
+    return false;
+  });
   const [predictorHint, setPredictorHint] = useState("");
   const [erpTest, setErpTest] = useState("");
 
@@ -94,6 +121,11 @@ export default function MySchedule() {
       setBlocks(b);
       setTotalHours(data.total_study_hours ?? totalAvailable);
       setHasGenerated(true);
+      // persist for Dashboard preview (per-user) and for reload
+      try {
+        const u = JSON.parse(localStorage.getItem("campusiq_user") || "null");
+        if (u?.id) localStorage.setItem(`schedule_cache_${u.id}`, JSON.stringify({ blocks: b, totalHours: data.total_study_hours ?? totalAvailable, at: new Date().toISOString(), detailed_plan: data.detailed_plan }));
+      } catch {}
     } catch (e) {
       const msg = e.response?.data?.detail || e.message || "Failed to generate schedule";
       setError(typeof msg === "string" ? msg : JSON.stringify(msg));

@@ -120,6 +120,28 @@ export default function StudentDashboard() {
     return erpMarks.subjects.filter((s) => (s.test || "Unknown") === selectedTest);
   }, [erpMarks, selectedTest]);
 
+  // schedule preview: prefer server, fallback to localStorage cache from MySchedule
+  const schedulePreview = useMemo(() => {
+    if (data?.schedulePreview?.length) return data.schedulePreview;
+    try {
+      const key = user?.id ? `schedule_cache_${user.id}` : null;
+      if (!key) return [];
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      const blocks = parsed?.blocks || [];
+      // take first 3 blocks as preview
+      return blocks.slice(0, 3).map((b) => ({
+        id: b.id,
+        title: `${b.subject} · ${b.task || b.focus || ""}`.slice(0, 40),
+        day: b.day,
+        time: `${b.start}–${b.end}`,
+        reason: b.reason_label || b.reason,
+        kind: b.kind,
+      }));
+    } catch { return []; }
+  }, [data?.schedulePreview, user?.id, erpMarks]);
+
   const testAvg = useMemo(() => {
     if (!filteredSubjects.length) return null;
     const vals = filteredSubjects.map((s) => s.percent).filter((v) => v != null);
@@ -323,23 +345,22 @@ export default function StudentDashboard() {
               Full schedule →
             </Link>
           </div>
-          {data.schedulePreview.length ? (
+          {schedulePreview.length ? (
             <ul className="space-y-3">
-              {data.schedulePreview.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex items-center justify-between rounded-xl bg-surface px-4 py-3 border border-border/60"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-ink">{item.title}</p>
-                    <p className="text-xs text-ink-muted">
-                      {item.day} · {item.time}
-                    </p>
-                  </div>
-                  <span className="text-[10px] rounded-full bg-accent-soft text-ink-muted px-2 py-0.5">
-                    {item.reason}
-                  </span>
-                </li>
+              {schedulePreview.map((item) => (
+                <Link key={item.id} to="/schedule" className="block">
+                  <li className="flex items-center justify-between rounded-xl bg-surface px-4 py-3 border border-border/60 hover:border-primary/40 hover:bg-primary-soft/30 transition-colors cursor-pointer">
+                    <div>
+                      <p className="text-sm font-medium text-ink">{item.title}</p>
+                      <p className="text-xs text-ink-muted">
+                        {item.day} · {item.time}
+                      </p>
+                    </div>
+                    <span className={`text-[10px] rounded-full px-2 py-0.5 border font-medium ${item.kind === 'marks' ? 'bg-amber-50 text-amber-700 border-amber-200' : item.reason?.includes('Important') ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-sky-50 text-sky-700 border-sky-200'}`}>
+                      {item.reason}
+                    </span>
+                  </li>
+                </Link>
               ))}
             </ul>
           ) : (
