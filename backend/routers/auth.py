@@ -66,8 +66,23 @@ def signup(body: SignupRequest) -> AuthResponse:
         ) from exc
 
     if body.role == "student":
+        # Don't seed mock defaults (75/65/0.75 etc). Profile is created empty and
+        # filled only with real ERP data via POST /erp/connect. Nullable columns
+        # (migrations 002→003) allow this to be skipped entirely; we try an
+        # explicit NULL row for compatibility and ignore if it already exists.
         try:
-            supabase.table("student_profiles").insert({"user_id": user_id}).execute()
+            supabase.table("student_profiles").insert(
+                {
+                    "user_id": user_id,
+                    "attendance_pct": None,
+                    "past_marks": None,
+                    "submission_rate": None,
+                    "login_frequency": None,
+                    "resume_scans_count": None,
+                    "mock_interview_score": None,
+                    "career_chat_activity_count": None,
+                }
+            ).execute()
         except Exception:
             pass
 

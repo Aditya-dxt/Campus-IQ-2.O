@@ -11,7 +11,7 @@ def _fetch_student_profile(user_id: str) -> dict | None:
         supabase = get_supabase_client()
         result = (
             supabase.table("student_profiles")
-            .select(", ".join(FEATURE_NAMES))
+            .select(", ".join(FEATURE_NAMES) + ", updated_at")
             .eq("user_id", user_id)
             .limit(1)
             .execute()
@@ -119,22 +119,44 @@ def student_dashboard(user_id: str) -> dict:
     # Try to get real student profile data from the DB
     profile = _fetch_student_profile(user_id)
     if profile:
-        features = {name: profile[name] for name in FEATURE_NAMES}
-        prediction = predict_risk(features)
+        # Authentic: if any feature is still NULL (no real data yet), treat as empty
+        # but still surface real attendance/past_marks if they exist
+        has_real_features = all(profile.get(name) is not None for name in FEATURE_NAMES)
+        if has_real_features:
+            features = {name: profile[name] for name in FEATURE_NAMES}
+            try:
+                prediction = predict_risk(features)
+            except Exception:
+                prediction = None
+            if prediction:
+                resume_score = _latest_resume_score(user_id)
+                return {
+                    "resumeScore": resume_score,
+                    "placementReadiness": prediction["placement_readiness"],
+                    "academicRisk": prediction["academic_risk"],
+                    "topFactor": prediction["top_factor"],
+                    "hasData": True,
+                    "attendancePct": float(profile.get("attendance_pct")) if profile.get("attendance_pct") is not None else None,
+                    "pastMarks": float(profile.get("past_marks")) if profile.get("past_marks") is not None else None,
+                    "attendanceUpdatedAt": profile.get("updated_at"),
+                    "schedulePreview": [],
+                    "recentChat": None,
+                }
+        # Partial or no features — authentic empty for risk/readiness, but keep real attendance/marks if synced
         resume_score = _latest_resume_score(user_id)
         return {
             "resumeScore": resume_score,
-            "placementReadiness": prediction["placement_readiness"],
-            "academicRisk": prediction["academic_risk"],
-            "topFactor": prediction["top_factor"],
-            "hasData": True,
+            "placementReadiness": None,
+            "academicRisk": None,
+            "topFactor": None,
+            "hasData": False,
             "attendancePct": float(profile.get("attendance_pct")) if profile.get("attendance_pct") is not None else None,
             "pastMarks": float(profile.get("past_marks")) if profile.get("past_marks") is not None else None,
             "attendanceUpdatedAt": profile.get("updated_at"),
             "schedulePreview": [],
             "recentChat": None,
         }
-    # No real data — authentic empty state
+    # No profile row at all — authentic empty state
     resume_score = _latest_resume_score(user_id)
     return {
         "resumeScore": resume_score,

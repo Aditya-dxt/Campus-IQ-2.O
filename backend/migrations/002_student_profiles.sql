@@ -1,15 +1,17 @@
 -- Student activity features for risk prediction
 -- Run after 001_init.sql
+-- Updated 2026-09-04: removed NOT NULL DEFAULTs so new accounts start empty (authentic, no mock data)
+-- Real values are written only via POST /erp/connect
 
 CREATE TABLE student_profiles (
     user_id UUID PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
-    attendance_pct NUMERIC(5, 2) NOT NULL DEFAULT 75,
-    past_marks NUMERIC(5, 2) NOT NULL DEFAULT 65,
-    submission_rate NUMERIC(4, 3) NOT NULL DEFAULT 0.75,
-    login_frequency INTEGER NOT NULL DEFAULT 5,
-    resume_scans_count INTEGER NOT NULL DEFAULT 2,
-    mock_interview_score NUMERIC(5, 2) NOT NULL DEFAULT 60,
-    career_chat_activity_count INTEGER NOT NULL DEFAULT 3,
+    attendance_pct NUMERIC(5, 2),
+    past_marks NUMERIC(5, 2),
+    submission_rate NUMERIC(4, 3),
+    login_frequency INTEGER,
+    resume_scans_count INTEGER,
+    mock_interview_score NUMERIC(5, 2),
+    career_chat_activity_count INTEGER,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
