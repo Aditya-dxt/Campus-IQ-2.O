@@ -236,10 +236,11 @@ def erp_refresh(current_user: CurrentUser):
 
 @router.get("/status", status_code=status.HTTP_200_OK)
 def erp_status(current_user: CurrentUser):
-    """Whether ERP is linked and last sync info."""
+    """Whether ERP is linked and last sync info. Resilient to missing migration columns."""
     if current_user.get("role") != "student":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only students.")
     supabase = get_supabase_client()
+    # Try erp_credentials table (migration 004) — may not exist yet
     try:
         res = supabase.table("erp_credentials").select("erp_id, last_synced_at, last_attendance_pct, last_marks_avg").eq("user_id", current_user["sub"]).limit(1).execute()
         if res.data and res.data[0].get("erp_id"):
@@ -247,15 +248,24 @@ def erp_status(current_user: CurrentUser):
             return {"connected": True, "erp_id": r.get("erp_id"), "last_synced_at": r.get("last_synced_at"), "attendance_pct": r.get("last_attendance_pct"), "avg_marks": r.get("last_marks_avg")}
     except Exception:
         pass
+    # Fallback: check student_profiles with minimal columns that always exist
     try:
-        res2 = supabase.table("student_profiles").select("erp_id, erp_last_synced, attendance_pct, past_marks").eq("user_id", current_user["sub"]).limit(1).execute()
-        if res2.data and res2.data[0].get("erp_id"):
-            r = res2.data[0]
-            return {"connected": True, "erp_id": r.get("erp_id"), "last_synced_at": r.get("erp_last_synced"), "attendance_pct": r.get("attendance_pct"), "avg_marks": r.get("past_marks")}
+        res2 = supabase.table("student_profiles").select("attendance_pct, past_marks, updated_at").eq("user_id", current_user["sub"]).limit(1).execute()
         if res2.data and res2.data[0].get("attendance_pct") is not None:
-            # Has attendance but no stored creds — treat as connected via legacy
             r = res2.data[0]
-            return {"connected": True, "erp_id": r.get("erp_id") or "linked", "last_synced_at": r.get("erp_last_synced"), "attendance_pct": r.get("attendance_pct"), "avg_marks": r.get("past_marks")}
+            # Try to enrich with erp_id if column exists — ignore error if not
+            erp_id = "linked"
+            last_synced = r.get("updated_at")
+            try:
+                res3 = supabase.table("student_profiles").select("erp_id, erp_last_synced").eq("user_id", current_user["sub"]).limit(1).execute()
+                if res3.data:
+                    if res3.data[0].get("erp_id"):
+                        erp_id = res3.data[0].get("erp_id")
+                    if res3.data[0].get("erp_last_synced"):
+                        last_synced = res3.data[0].get("erp_last_synced")
+            except Exception:
+                pass
+            return {"connected": True, "erp_id": erp_id, "last_synced_at": last_synced, "attendance_pct": r.get("attendance_pct"), "avg_marks": r.get("past_marks")}
     except Exception:
         pass
     return {"connected": False}
