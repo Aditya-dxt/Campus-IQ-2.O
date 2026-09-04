@@ -65,7 +65,7 @@ def _looks_like_subject(s: str) -> bool:
         return True
     return False
 
-def _parse_marks_table(html: str) -> list[dict[str, Any]]:
+def _parse_marks_table(html: str, student_hint: str | None = None) -> list[dict[str, Any]]:
     soup = BeautifulSoup(html, "html.parser")
     results: list[dict[str, Any]] = []
 
@@ -147,6 +147,87 @@ def _parse_marks_table(html: str) -> list[dict[str, Any]]:
                         results.append({"subject": subject, "marks": marks, "max_marks": max_marks, "percent": percent, "raw": raw, "test": test_name})
                 if results:
                     continue  # done with this table, don't fall through to vertical parser
+
+        # --- PSIT ASG-1 layout: subjects are COLUMNS (Student_Id|RollNo|Student_Name|BCS-052|BCS-055...) ---
+        subj_cols = [i for i, h in enumerate(headers) if _is_subject_code(h)]
+        if subj_cols:
+            # Find RollNo column to filter to current student if hint given
+            roll_idx = next((i for i, h in enumerate(headers_lower) if "roll" in h), None)
+            name_idx = next((i for i, h in enumerate(headers_lower) if "student_name" in h or h.strip()=="student name"), None)
+            # Collect all data rows for this table
+            for row in table.find_all("tr")[1:]:
+                cols = [td.get_text(strip=True) for td in row.find_all(["td", "th"])]
+                if len(cols) <= max(subj_cols):
+                    continue
+                # Skip header-like rows or empty
+                if any(c.lower() in ("student_id","rollno","student_name") for c in cols):
+                    continue
+                # Filter to current student's row if hint provided and multiple rows exist
+                if student_hint and roll_idx is not None and roll_idx < len(cols):
+                    # If this row's RollNo doesn't match hint, skip (class has many rows)
+                    if cols[roll_idx] and cols[roll_idx] != student_hint:
+                        # But if no row matches hint after scanning all, fallback to first data row
+                        # So just skip non-matching for now; we'll fallback later if results stays empty
+                        continue
+                if "no data" in " ".join(cols).lower():
+                    continue
+                for col_idx in subj_cols:
+                    if col_idx >= len(cols):
+                        continue
+                    subject = headers[col_idx].strip()  # header is the subject code (BCS-052)
+                    marks_raw = cols[col_idx].strip()
+                    if not marks_raw or marks_raw in ("-", "--") or marks_raw.lower() in ("ab", "absent", "na"):
+                        continue
+                    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:/\s*(\d+(?:\.\d+)?))?", marks_raw)
+                    if not m:
+                        continue
+                    marks = float(m.group(1))
+                    max_marks = float(m.group(2)) if m.group(2) else None
+                    # ASG marks are out of 10 — convert to percent if no max
+                    if max_marks is None:
+                        # If marks <=10 and looks like ASG (we're in ASG-1 context), percent = *10
+                        # Caller will tag test name; for now assume ASG if marks <=10
+                        if marks <= 10:
+                            percent = round(marks * 10, 2)
+                            max_marks = 10.0
+                        else:
+                            percent = marks
+                    else:
+                        percent = round((marks / max_marks) * 100, 2) if max_marks > 0 else marks
+                    results.append({"subject": subject, "marks": marks, "max_marks": max_marks, "percent": percent, "raw": marks_raw})
+            # Fallback: if hint filter yielded 0 but table has data, take first data row (single-student page)
+            if not results and student_hint is not None:
+                for row in table.find_all("tr")[1:]:
+                    cols = [td.get_text(strip=True) for td in row.find_all(["td", "th"])]
+                    if len(cols) <= max(subj_cols):
+                        continue
+                    if "no data" in " ".join(cols).lower():
+                        continue
+                    has_subject_data = any(re.search(r"\d", cols[c]) for c in subj_cols if c < len(cols))
+                    if not has_subject_data:
+                        continue
+                    for col_idx in subj_cols:
+                        if col_idx >= len(cols):
+                            continue
+                        subject = headers[col_idx].strip()
+                        marks_raw = cols[col_idx].strip()
+                        if not marks_raw or marks_raw in ("-", "--"):
+                            continue
+                        m = re.search(r"(\d+(?:\.\d+)?)\s*(?:/\s*(\d+(?:\.\d+)?))?", marks_raw)
+                        if not m:
+                            continue
+                        marks = float(m.group(1))
+                        max_marks = float(m.group(2)) if m.group(2) else None
+                        if max_marks is None and marks <= 10:
+                            percent = round(marks * 10, 2)
+                            max_marks = 10.0
+                        else:
+                            percent = round((marks / max_marks) * 100, 2) if max_marks and max_marks>0 else marks
+                        results.append({"subject": subject, "marks": marks, "max_marks": max_marks, "percent": percent, "raw": marks_raw})
+                    if results:
+                        break
+            if results:
+                continue
 
         # Vertical layout: one test per page, rows = subjects, cols include subject+marks
         has_subject = any("subject" in h or "course" in h or "paper" in h or "code" in h for h in headers_lower)
@@ -246,7 +327,7 @@ def _clean_form_action(raw: str | None) -> str:
         return ERP_BASE + "/" + raw.lstrip("/")
     return ERP_MARKS_REPORT
 
-def _fetch_marks(client: httpx.Client) -> dict[str, Any]:
+def _fetch_marks(client: httpx.Client, student_hint: str | None = None) -> dict[str, Any]:
     all_marks: list[dict[str, Any]] = []
     debug: list[str] = []
 
@@ -295,7 +376,7 @@ def _fetch_marks(client: httpx.Client) -> dict[str, Any]:
             debug.append(f"js ajax candidates: {list(dict.fromkeys(ajax_candidates))[:3]}")
 
         # Try parsing GET page first (maybe marks already rendered — e.g. wide table with all tests)
-        parsed = _parse_marks_table(html)
+        parsed = _parse_marks_table(html, student_hint)
         if parsed:
             # If parser already tagged test per column (transposed), keep it; else tag with first option
             has_test_tag = any("test" in row for row in parsed)
@@ -321,7 +402,7 @@ def _fetch_marks(client: httpx.Client) -> dict[str, Any]:
             for get_key in ([sel_name] if sel_name else []) + ["cTest", "test", "test_name"]:
                 try:
                     resp = client.get(f"{form_action}?{get_key}={value}", timeout=TIMEOUT, headers={"Referer": ERP_MARKS_REPORT})
-                    p2 = _parse_marks_table(resp.text)
+                    p2 = _parse_marks_table(resp.text, student_hint)
                     if p2:
                         for row in p2:
                             if "test" not in row:
@@ -361,7 +442,7 @@ def _fetch_marks(client: httpx.Client) -> dict[str, Any]:
                     # Quick check: does response contain any subject-code-like text (BCS-052 etc)?
                     has_subject_hint = bool(re.search(r"BCS|KCS|PSIT", resp.text, re.I))
                     has_no_data = "no data available" in resp.text.lower()
-                    p2 = _parse_marks_table(resp.text)
+                    p2 = _parse_marks_table(resp.text, student_hint)
                     if p2:
                         for row in p2:
                             if "test" not in row:
@@ -439,7 +520,7 @@ def _fetch_marks(client: httpx.Client) -> dict[str, Any]:
                         resp = client.post(ajax_url, data={sel_name: value} if sel_name else {"test": display, "cTest": display}, timeout=TIMEOUT)
                         if resp.status_code == 404:
                             continue
-                        p2 = _parse_marks_table(resp.text)
+                        p2 = _parse_marks_table(resp.text, student_hint)
                         if p2:
                             for row in p2:
                                 if "test" not in row:
@@ -521,5 +602,5 @@ def scrape_psit_erp(username: str, password: str) -> dict[str, Any]:
         parsed = _parse_attendance(html)
         if parsed["attendance_pct"] is None:
             raise ValueError(f"Could not find attendance on dashboard. Snippet: {parsed['raw_text_snippet'][:300]}")
-        marks_data = _fetch_marks(client)
+        marks_data = _fetch_marks(client, username.strip())
         return {"erp_id": username.strip(), "attendance_pct": parsed["attendance_pct"], "with_pf_pct": parsed["with_pf_pct"], "without_pf_pct": parsed["without_pf_pct"], "tl": parsed["tl"], "present": parsed["present"], "pf": parsed["pf"], "absent": parsed["absent"], "section": parsed["section"], "marks": marks_data["subjects"], "avg_marks_percent": marks_data["avg_percent"], "marks_debug": marks_data["debug"], "scraped_at": __import__("datetime").datetime.utcnow().isoformat() + "Z"}
