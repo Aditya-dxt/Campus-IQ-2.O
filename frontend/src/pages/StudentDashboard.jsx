@@ -16,6 +16,7 @@ import * as erpApi from "../api/erp";
 import LoadingState from "../components/LoadingState";
 import ErpConnectModal from "../components/ErpConnectModal";
 import { formatPercent, readinessLabel, riskBadgeClass, riskLabel } from "../utils/risk";
+import { useAuth } from "../context/AuthContext";
 
 function SummaryCard({ icon: Icon, label, value, sub, badgeClass, empty }) {
   return (
@@ -38,6 +39,7 @@ function SummaryCard({ icon: Icon, label, value, sub, badgeClass, empty }) {
 }
 
 export default function StudentDashboard() {
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [erpMarks, setErpMarks] = useState(null);
   const [selectedTest, setSelectedTest] = useState("");
@@ -67,14 +69,24 @@ export default function StudentDashboard() {
       const tests = [...new Set(cached.subjects.map((s) => s.test || "CT-1"))];
       if (tests.length) setSelectedTest(tests[0]);
     }
+    if (!user) return;
+    const dismissKey = `erp_modal_dismissed_${user.id}`;
+    const wasDismissed = localStorage.getItem(dismissKey) === "1";
+    const hasCache = !!erpApi.getCachedErpMarks()?.subjects?.length;
     erpApi.getErpStatus().then((s) => {
       setErpStatus(s);
-      if (!s.connected) {
-        // show one-time connect box after short delay for new account
+      if (s.connected) {
+        localStorage.removeItem(dismissKey);
+        return;
+      }
+      // Only auto-show if no cache, not dismissed, and truly not connected on server
+      if (!hasCache && !wasDismissed) {
         setTimeout(() => setShowErpModal(true), 600);
       }
-    }).catch(() => {});
-  }, []);
+    }).catch(() => {
+      if (!hasCache && !wasDismissed) setTimeout(() => setShowErpModal(true), 800);
+    });
+  }, [user?.id]);
 
   const tests = useMemo(() => {
     if (!erpMarks?.subjects?.length) return [];
@@ -99,6 +111,7 @@ export default function StudentDashboard() {
 
   const handleErpConnect = async (erpId, password) => {
     const res = await erpApi.connectErp(erpId, password);
+    try { if (user) localStorage.removeItem(`erp_modal_dismissed_${user.id}`); } catch {}
     setErpMarks({ subjects: res.marks.subjects, avg: res.marks.avg_percent, at: res.scraped_at });
     const ts = [...new Set(res.marks.subjects.map((s) => s.test || "CT-1"))];
     if (ts.length) setSelectedTest(ts[0]);
@@ -335,7 +348,12 @@ export default function StudentDashboard() {
         </section>
       </div>
 
-      <ErpConnectModal open={showErpModal} onClose={(ok) => setShowErpModal(false)} onConnect={handleErpConnect} />
+      <ErpConnectModal open={showErpModal} onClose={(ok) => {
+        if (!ok && user) {
+          try { localStorage.setItem(`erp_modal_dismissed_${user.id}`, "1"); } catch {}
+        }
+        setShowErpModal(false);
+      }} onConnect={handleErpConnect} />
     </div>
   );
 }

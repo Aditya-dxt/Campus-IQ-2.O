@@ -1,16 +1,33 @@
 import { apiClient } from "./client";
+
+function userCacheKey() {
+  try {
+    const u = JSON.parse(localStorage.getItem("campusiq_user") || "null");
+    if (u?.id) return `erp_marks_cache_${u.id}`;
+  } catch {}
+  return "erp_marks_cache";
+}
+
+function saveCache(payload) {
+  try {
+    const key = userCacheKey();
+    localStorage.setItem(key, JSON.stringify(payload));
+    // keep legacy key for backward compat
+    localStorage.setItem("erp_marks_cache", JSON.stringify(payload));
+  } catch {}
+}
+
 export async function connectErp(erpId, password) {
   const { data } = await apiClient.post("/erp/connect", { erp_id: erpId, password });
   if (data?.marks?.subjects) {
-    try { localStorage.setItem("erp_marks_cache", JSON.stringify({ subjects: data.marks.subjects, avg: data.marks.avg_percent, at: data.scraped_at })); } catch {}
+    saveCache({ subjects: data.marks.subjects, avg: data.marks.avg_percent, at: data.scraped_at });
   }
-  try { localStorage.setItem("erp_connected", "1"); } catch {}
   return data;
 }
 export async function refreshErp() {
   const { data } = await apiClient.post("/erp/refresh");
   if (data?.marks?.subjects) {
-    try { localStorage.setItem("erp_marks_cache", JSON.stringify({ subjects: data.marks.subjects, avg: data.marks.avg_percent, at: data.scraped_at })); } catch {}
+    saveCache({ subjects: data.marks.subjects, avg: data.marks.avg_percent, at: data.scraped_at });
   }
   return data;
 }
@@ -27,8 +44,13 @@ export async function getErpMarks() {
   return data;
 }
 export function getCachedErpMarks() {
-  try { return JSON.parse(localStorage.getItem("erp_marks_cache") || "null"); } catch { return null; }
+  try {
+    const key = userCacheKey();
+    const v = localStorage.getItem(key);
+    if (v) return JSON.parse(v);
+    return JSON.parse(localStorage.getItem("erp_marks_cache") || "null");
+  } catch { return null; }
 }
 export function isErpConnected() {
-  try { return localStorage.getItem("erp_connected") === "1"; } catch { return false; }
+  try { return !!getCachedErpMarks()?.subjects?.length; } catch { return false; }
 }
