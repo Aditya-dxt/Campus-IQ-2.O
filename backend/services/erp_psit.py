@@ -265,14 +265,18 @@ def _fetch_marks(client: httpx.Client) -> dict[str, Any]:
         form_action = _clean_form_action(form_action_raw)
         debug.append(f"discovered select name={sel_name!r} id={sel_id!r} form_action={form_action!r} raw={form_action_raw!r}")
 
-        # Discover options
+        # Discover options — keep both display and value for debug
         options: list[tuple[str, str]] = []
         for opt in soup.find_all("option"):
             txt = opt.get_text(strip=True)
             val = opt.get("value", "").strip()
             if txt and txt.lower() not in ("select test here", "select test", "select test:"):
                 options.append((txt, val if val and val not in ("", txt) else txt))
-        debug.append(f"options discovered: {[t for t,_ in options][:8]}")
+        debug.append(f"options discovered: {options[:8]}")
+        # Hidden inputs (ASPNET viewstate etc) — must be sent back with POST
+        hidden_inputs = {inp.get("name"): inp.get("value","") for inp in soup.find_all("input", {"type":"hidden"}) if inp.get("name")}
+        if hidden_inputs:
+            debug.append(f"hidden inputs: {list(hidden_inputs.keys())[:5]}")
 
         if not options:
             for t in ["CT-1", "CT-2", "ASG-1", "AT-1", "ASG-2", "AT-2"]:
@@ -312,23 +316,45 @@ def _fetch_marks(client: httpx.Client) -> dict[str, Any]:
                 debug.append(f"skip POST {display} — already have from GET transposed table")
                 continue
             tried = False
+
+            # 0) Try GET with query string — some ERPs use GET ?cTest=ASG-1
+            for get_key in ([sel_name] if sel_name else []) + ["cTest", "test", "test_name"]:
+                try:
+                    resp = client.get(f"{form_action}?{get_key}={value}", timeout=TIMEOUT, headers={"Referer": ERP_MARKS_REPORT})
+                    p2 = _parse_marks_table(resp.text)
+                    if p2:
+                        for row in p2:
+                            if "test" not in row:
+                                row["test"] = display
+                            if row.get("max_marks") is None and row.get("test","").upper().startswith("ASG") and row.get("marks", 0) <= 10:
+                                row["percent"] = round(row["marks"] * 10, 2)
+                                row["max_marks"] = 10.0
+                        all_marks.extend(p2)
+                        debug.append(f"GET {get_key}={value!r} -> {form_action} found {len(p2)} rows")
+                        tried = True
+                        break
+                except Exception:
+                    continue
+            if tried:
+                continue
+
             payload_variants: list[dict[str, str]] = []
+            # Include hidden inputs as base for POST (viewstate etc)
+            base_hidden = dict(hidden_inputs) if hidden_inputs else {}
             if sel_name:
-                payload_variants.append({sel_name: value})
-                if value != display:
-                    payload_variants.append({sel_name: display})
+                # Prefer discovered name with both value and display
+                for v in ([value, display] if value != display else [value]):
+                    payload_variants.append({**base_hidden, sel_name: v})
                 if sel_id and sel_id != sel_name:
-                    payload_variants.append({sel_id: value})
-                    if value != display:
-                        payload_variants.append({sel_id: display})
+                    for v in ([value, display] if value != display else [value]):
+                        payload_variants.append({**base_hidden, sel_id: v})
             for k in ["test", "test_name", "test_id", "exam_id", "examId", "id", "testId", "cTest"]:
-                payload_variants.append({k: value})
-                if value != display:
-                    payload_variants.append({k: display})
+                for v in ([value, display] if value != display else [value]):
+                    payload_variants.append({**base_hidden, k: v})
 
             for payload in payload_variants:
                 try:
-                    resp = client.post(form_action, data=payload, timeout=TIMEOUT, headers={"Referer": ERP_MARKS_REPORT, "Origin": ERP_BASE})
+                    resp = client.post(form_action, data=payload, timeout=TIMEOUT, headers={"Referer": ERP_MARKS_REPORT, "Origin": ERP_BASE, "X-Requested-With": "XMLHttpRequest"})
                     if 'name="username"' in resp.text:
                         debug.append(f"POST {display} session expired via {list(payload.keys())[0]}")
                         break
@@ -337,7 +363,6 @@ def _fetch_marks(client: httpx.Client) -> dict[str, Any]:
                         for row in p2:
                             if "test" not in row:
                                 row["test"] = display
-                            # Normalize ASG 0-10 -> percent 0-100 if parser left raw
                             if row.get("max_marks") is None and row.get("test","").upper().startswith("ASG") and row.get("marks", 0) <= 10:
                                 row["percent"] = round(row["marks"] * 10, 2)
                                 row["max_marks"] = 10.0
@@ -345,23 +370,49 @@ def _fetch_marks(client: httpx.Client) -> dict[str, Any]:
                         debug.append(f"POST {display} via {list(payload.keys())[0]}={list(payload.values())[0]!r} -> {form_action} found {len(p2)} rows")
                         tried = True
                         break
-                    # Try JSON
+                    # Try JSON — handle object list and DataTables array-of-arrays
                     try:
                         j = resp.json()
-                        if isinstance(j, dict) and "data" in j:
-                            j = j["data"]
+                        if isinstance(j, dict):
+                            if "data" in j:
+                                j = j["data"]
+                            elif "aaData" in j:
+                                j = j["aaData"]
                         if isinstance(j, list) and j:
                             added = 0
                             for item in j:
-                                subj = item.get("subject") or item.get("Subject") or item.get("course") or item.get("Course") or item.get("subject_code")
-                                mk = item.get("marks") or item.get("Marks") or item.get("obtained") or item.get("Obtained") or item.get("score")
-                                if subj and mk is not None:
-                                    try:
-                                        percent = float(re.search(r"[\d.]+", str(mk)).group())
-                                        all_marks.append({"subject": str(subj), "marks": percent, "max_marks": None, "percent": percent, "test": display})
+                                if isinstance(item, dict):
+                                    subj = item.get("subject") or item.get("Subject") or item.get("course") or item.get("Course") or item.get("subject_code") or item.get("subjectCode")
+                                    mk = item.get("marks") or item.get("Marks") or item.get("obtained") or item.get("Obtained") or item.get("score") or item.get("Score")
+                                    maxv = item.get("max") or item.get("max_marks") or item.get("Max")
+                                    if subj and mk is not None:
+                                        try:
+                                            marks_f = float(re.search(r"[\d.]+", str(mk)).group())
+                                            max_f = float(re.search(r"[\d.]+", str(maxv)).group()) if maxv and re.search(r"[\d.]+", str(maxv)) else None
+                                            percent = round(marks_f / max_f * 100, 2) if max_f else (round(marks_f*10,2) if display.upper().startswith("ASG") and marks_f<=10 else marks_f)
+                                            all_marks.append({"subject": str(subj).strip(), "marks": marks_f, "max_marks": max_f, "percent": percent, "test": display, "raw": str(mk)})
+                                            added += 1
+                                        except Exception:
+                                            pass
+                                elif isinstance(item, list) and len(item) >= 2:
+                                    subj = None
+                                    marks_f = None
+                                    max_f = None
+                                    for cell in item:
+                                        cell_s = str(cell).strip()
+                                        if not subj and _looks_like_subject(cell_s):
+                                            subj = cell_s
+                                        elif re.match(r"^\d+(?:\.\d+)?(?:\s*/\s*\d+(?:\.\d+)?)?$", cell_s):
+                                            m = re.search(r"(\d+(?:\.\d+)?)\s*(?:/\s*(\d+(?:\.\d+)?))?", cell_s)
+                                            if m:
+                                                marks_f = float(m.group(1))
+                                                if m.group(2):
+                                                    max_f = float(m.group(2))
+                                            break
+                                    if subj and marks_f is not None:
+                                        percent = round(marks_f / max_f * 100, 2) if max_f else (round(marks_f*10,2) if display.upper().startswith("ASG") and marks_f<=10 else marks_f)
+                                        all_marks.append({"subject": subj, "marks": marks_f, "max_marks": max_f, "percent": percent, "test": display, "raw": str(marks_f)})
                                         added += 1
-                                    except Exception:
-                                        pass
                             if added:
                                 debug.append(f"JSON {form_action} {display}: found {added} rows")
                                 tried = True
@@ -390,8 +441,15 @@ def _fetch_marks(client: httpx.Client) -> dict[str, Any]:
                             break
                     except Exception:
                         continue
-            if not tried:
-                debug.append(f"POST {display}: no rows found after all variants")
+                if not tried:
+                    # capture last POST preview for diagnosis
+                    try:
+                        last = client.post(form_action, data={sel_name: value} if sel_name else {"cTest": value}, timeout=TIMEOUT, headers={"Referer": ERP_MARKS_REPORT, "Origin": ERP_BASE})
+                        preview = re.sub(r"\s+", " ", last.text[:400])[:200]
+                        debug.append(f"POST {display}: no rows — last resp {last.status_code} {len(last.text)} chars preview: {preview}")
+                    except Exception:
+                        pass
+                    debug.append(f"POST {display}: no rows found after all variants")
 
     except Exception as e:
         debug.append(f"marks fetch error: {e}")
