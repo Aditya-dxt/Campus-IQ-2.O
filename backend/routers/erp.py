@@ -292,10 +292,11 @@ def erp_profile(current_user: CurrentUser):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only students.")
     try:
         supabase = get_supabase_client()
-        res = supabase.table("student_profiles").select("attendance_pct, past_marks, submission_rate, updated_at").eq("user_id", current_user["sub"]).limit(1).execute()
+        res = supabase.table("student_profiles").select("attendance_pct, past_marks, submission_rate, updated_at, year, section, erp_attendance, erp_marks, erp_last_synced").eq("user_id", current_user["sub"]).limit(1).execute()
         if not res.data:
             return {"attendance_pct": None, "past_marks": None, "message": "No ERP data yet — use POST /erp/connect with your PSIT credentials."}
-        return res.data[0]
+        r = res.data[0]
+        return {"attendance_pct": r.get("attendance_pct"), "past_marks": r.get("past_marks"), "submission_rate": r.get("submission_rate"), "updated_at": r.get("updated_at"), "year": r.get("year"), "section": r.get("section"), "erp_attendance": r.get("erp_attendance"), "erp_marks": r.get("erp_marks"), "erp_last_synced": r.get("erp_last_synced")}
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e
 
@@ -303,17 +304,28 @@ def erp_profile(current_user: CurrentUser):
 @router.get("/marks", status_code=status.HTTP_200_OK)
 def erp_marks_preview(current_user: CurrentUser):
     """
-    Return subject-wise marks preview for the scheduler.
-    Uses the latest past_marks avg + reconstructs per-subject weak list from stored data.
-    For full per-subject breakdown, re-run POST /erp/connect.
+    Return subject-wise marks preview for the scheduler and dashboard.
+    Reads stored erp_marks JSON (list of {subject, percent, test}) from student_profiles.
     """
     if current_user.get("role") != "student":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only students.")
     try:
         supabase = get_supabase_client()
-        res = supabase.table("student_profiles").select("past_marks, attendance_pct, updated_at").eq("user_id", current_user["sub"]).limit(1).execute()
+        res = supabase.table("student_profiles").select("past_marks, attendance_pct, updated_at, erp_marks, erp_attendance, year, section").eq("user_id", current_user["sub"]).limit(1).execute()
         if not res.data:
-            return {"past_marks": None, "subjects": []}
-        return {"past_marks": res.data[0].get("past_marks"), "attendance_pct": res.data[0].get("attendance_pct"), "updated_at": res.data[0].get("updated_at")}
+            return {"past_marks": None, "subjects": [], "attendance_pct": None}
+        r = res.data[0]
+        subjects = r.get("erp_marks") or []
+        # normalize: ensure list
+        if isinstance(subjects, dict):
+            subjects = subjects.get("subjects", [])
+        avg = r.get("past_marks")
+        if subjects and avg is None:
+            try:
+                vals = [float(s.get("percent", 0)) for s in subjects if s.get("percent") is not None]
+                avg = round(sum(vals)/len(vals), 1) if vals else None
+            except Exception:
+                pass
+        return {"past_marks": avg, "avg_percent": avg, "attendance_pct": r.get("attendance_pct"), "updated_at": r.get("updated_at"), "subjects": subjects, "erp_attendance": r.get("erp_attendance"), "year": r.get("year"), "section": r.get("section")}
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)) from e

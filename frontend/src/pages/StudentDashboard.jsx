@@ -68,6 +68,23 @@ export default function StudentDashboard() {
       setErpMarks(cached);
       const tests = [...new Set(cached.subjects.map((s) => s.test || "CT-1"))];
       if (tests.length) setSelectedTest(tests[0]);
+    } else {
+      // hydrate from server — DB already has ASG-1 after signup/refresh
+      erpApi.getErpMarks().then((m) => {
+        const subs = m?.subjects || m?.erp_marks || [];
+        if (subs.length) {
+          const avg = m.avg_percent ?? m.past_marks ?? null;
+          const at = m.updated_at || m.erp_last_synced || null;
+          const payload = { subjects: subs, avg, at };
+          try {
+            const key = JSON.parse(localStorage.getItem("campusiq_user") || "null")?.id ? `erp_marks_cache_${JSON.parse(localStorage.getItem("campusiq_user")).id}` : null;
+            if (key) localStorage.setItem(key, JSON.stringify(payload));
+          } catch {}
+          setErpMarks(payload);
+          const tests = [...new Set(subs.map((s) => s.test || "ASG-1"))];
+          if (tests.length) setSelectedTest(tests[0]);
+        }
+      }).catch(() => {});
     }
     if (!user) return;
     const dismissKey = `erp_modal_dismissed_${user.id}`;
@@ -154,6 +171,12 @@ export default function StudentDashboard() {
               ? "Here's a supportive snapshot of where you stand this week."
               : "Complete your profile below to unlock your personalised risk scores."}
           </p>
+          {(data.year || data.section) && (
+            <p className="mt-1.5 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+              <GraduationCap className="h-3.5 w-3.5" />
+              {data.year ? `Year ${data.year}` : ""}{data.year && data.section ? " · " : ""}{data.section || ""}
+            </p>
+          )}
         </div>
         {erpStatus?.connected ? (
           <button onClick={handleRefresh} disabled={refreshing} className="inline-flex items-center gap-2 rounded-xl border border-border bg-surface-elevated px-4 py-2 text-sm font-medium hover:bg-surface disabled:opacity-50">
