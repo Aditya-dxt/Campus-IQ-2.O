@@ -11,7 +11,7 @@ def _fetch_student_profile(user_id: str) -> dict | None:
         supabase = get_supabase_client()
         result = (
             supabase.table("student_profiles")
-            .select(", ".join(FEATURE_NAMES) + ", updated_at")
+            .select(", ".join(FEATURE_NAMES) + ", updated_at, year, section, erp_attendance, erp_marks")
             .eq("user_id", user_id)
             .limit(1)
             .execute()
@@ -19,7 +19,20 @@ def _fetch_student_profile(user_id: str) -> dict | None:
         if result.data:
             return result.data[0]
     except Exception:
-        pass
+        # Fallback without year/section if migration not run
+        try:
+            supabase = get_supabase_client()
+            result = (
+                supabase.table("student_profiles")
+                .select(", ".join(FEATURE_NAMES) + ", updated_at")
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            if result.data:
+                return result.data[0]
+        except Exception:
+            pass
     return None
 
 
@@ -41,32 +54,43 @@ def _latest_resume_score(user_id: str) -> int | None:
     return None
 
 
-def _student_record(user: dict) -> dict | None:
+def _student_record(user: dict, profile: dict | None = None) -> dict | None:
     """Build a student record from real DB profile only. Returns None if no profile."""
     user_id = user["id"]
-    profile = _fetch_student_profile(user_id)
+    if profile is None:
+        profile = _fetch_student_profile(user_id)
     if not profile:
-        # No authentic profile — do not fabricate data, return null so caller can skip
         return None
-    features = {name: profile[name] for name in FEATURE_NAMES}
+    features = {name: profile.get(name) for name in FEATURE_NAMES}
+    # If any feature missing, prediction not possible but we still surface attendance/marks for mentor
     try:
-        prediction = predict_risk(features)
+        prediction = predict_risk(features) if all(v is not None for v in features.values()) else None
     except Exception:
-        return None
+        prediction = None
     resume_score = _latest_resume_score(user_id)
+    section = profile.get("section")
+    if not section and profile.get("erp_attendance"):
+        try:
+            section = profile["erp_attendance"].get("section")
+        except Exception:
+            pass
     return {
         "id": user_id,
         "name": user.get("name", "Student"),
         "email": user.get("email", ""),
         "branch": user.get("branch"),
-        "academicRisk": prediction["academic_risk"],
-        "placementReadiness": prediction["placement_readiness"],
-        "topFactor": prediction["top_factor"],
+        "section": section,
+        "year": profile.get("year"),
+        "attendancePct": float(profile["attendance_pct"]) if profile.get("attendance_pct") is not None else None,
+        "pastMarks": float(profile["past_marks"]) if profile.get("past_marks") is not None else None,
+        "academicRisk": prediction["academic_risk"] if prediction else None,
+        "placementReadiness": prediction["placement_readiness"] if prediction else None,
+        "topFactor": prediction["top_factor"] if prediction else None,
         "resumeScore": resume_score,
     }
 
 
-def _fetch_students_from_db() -> list[dict]:
+def _fetch_students_from_db(mentor_section: str | None = None) -> list[dict]:
     try:
         supabase = get_supabase_client()
         result = (
@@ -80,16 +104,31 @@ def _fetch_students_from_db() -> list[dict]:
         records: list[dict] = []
         for u in result.data:
             rec = _student_record(u)
-            if rec is not None:
-                records.append(rec)
+            if rec is None:
+                continue
+            if mentor_section:
+                # Strict isolation: mentor sees only same year-section
+                ms = mentor_section.strip().upper()
+                ss = (rec.get("section") or "").strip().upper()
+                # Allow substring match: CS-III-M matches PSIT-CS-III-M
+                if not ss or ms not in ss and ss not in ms:
+                    # Also try year match fallback
+                    if rec.get("year") and ms and rec["year"].upper() not in ms:
+                        continue
+                    elif not rec.get("year"):
+                        continue
+                    # if above didn't match, skip
+                    if ms not in ss and ss not in ms:
+                        continue
+            records.append(rec)
         return records
     except Exception:
         return []
 
 
-def list_students() -> list[dict]:
-    """Return only authentic students who have a student_profiles row. No demo fallback."""
-    return _fetch_students_from_db()
+def list_students(mentor_section: str | None = None) -> list[dict]:
+    """Return only authentic students who have a student_profiles row. Filtered by mentor section if given."""
+    return _fetch_students_from_db(mentor_section)
 
 
 def get_student(student_id: str) -> dict | None:
@@ -116,11 +155,8 @@ def _fetch_user(user_id: str) -> dict | None:
 
 
 def student_dashboard(user_id: str) -> dict:
-    # Try to get real student profile data from the DB
     profile = _fetch_student_profile(user_id)
     if profile:
-        # Authentic: if any feature is still NULL (no real data yet), treat as empty
-        # but still surface real attendance/past_marks if they exist
         has_real_features = all(profile.get(name) is not None for name in FEATURE_NAMES)
         if has_real_features:
             features = {name: profile[name] for name in FEATURE_NAMES}
@@ -139,10 +175,11 @@ def student_dashboard(user_id: str) -> dict:
                     "attendancePct": float(profile.get("attendance_pct")) if profile.get("attendance_pct") is not None else None,
                     "pastMarks": float(profile.get("past_marks")) if profile.get("past_marks") is not None else None,
                     "attendanceUpdatedAt": profile.get("updated_at"),
+                    "year": profile.get("year"),
+                    "section": profile.get("section") or (profile.get("erp_attendance") or {}).get("section"),
                     "schedulePreview": [],
                     "recentChat": None,
                 }
-        # Partial or no features — authentic empty for risk/readiness, but keep real attendance/marks if synced
         resume_score = _latest_resume_score(user_id)
         return {
             "resumeScore": resume_score,
@@ -153,10 +190,11 @@ def student_dashboard(user_id: str) -> dict:
             "attendancePct": float(profile.get("attendance_pct")) if profile.get("attendance_pct") is not None else None,
             "pastMarks": float(profile.get("past_marks")) if profile.get("past_marks") is not None else None,
             "attendanceUpdatedAt": profile.get("updated_at"),
+            "year": profile.get("year"),
+            "section": profile.get("section") or (profile.get("erp_attendance") or {}).get("section"),
             "schedulePreview": [],
             "recentChat": None,
         }
-    # No profile row at all — authentic empty state
     resume_score = _latest_resume_score(user_id)
     return {
         "resumeScore": resume_score,
@@ -167,13 +205,15 @@ def student_dashboard(user_id: str) -> dict:
         "attendancePct": None,
         "pastMarks": None,
         "attendanceUpdatedAt": None,
+        "year": None,
+        "section": None,
         "schedulePreview": [],
         "recentChat": None,
     }
 
 
-def cohort_stats() -> dict:
-    students = list_students()
+def cohort_stats(mentor_section: str | None = None) -> dict:
+    students = list_students(mentor_section)
     if not students:
         return {
             "studentsOverseen": 0,
@@ -185,10 +225,10 @@ def cohort_stats() -> dict:
                 {"bucket": "Elevated", "count": 0, "fill": "#b85c5c"},
             ],
         }
-    low = sum(1 for s in students if s["academicRisk"] < 0.35)
-    mid = sum(1 for s in students if 0.35 <= s["academicRisk"] < 0.65)
-    high = sum(1 for s in students if s["academicRisk"] >= 0.65)
-    flagged = sum(1 for s in students if s["academicRisk"] >= 0.65)
+    low = sum(1 for s in students if s.get("academicRisk") is not None and s["academicRisk"] < 0.35)
+    mid = sum(1 for s in students if s.get("academicRisk") is not None and 0.35 <= s["academicRisk"] < 0.65)
+    high = sum(1 for s in students if s.get("academicRisk") is not None and s["academicRisk"] >= 0.65)
+    flagged = high
     return {
         "studentsOverseen": len(students),
         "currentlyFlagged": flagged,

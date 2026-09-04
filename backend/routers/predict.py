@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 
 from dependencies import CurrentUser, RequireMentor
 from services import predict_service
+from services.supabase_client import get_supabase_client
 from services.risk_predictor import FEATURE_NAMES, model_available, predict_risk
 
 router = APIRouter(prefix="/predict", tags=["predict"])
@@ -17,14 +18,12 @@ class ScoreRequest(BaseModel):
     mock_interview_score: float = Field(ge=0, le=100)
     career_chat_activity_count: int = Field(ge=0)
 
-
 def _ensure_model() -> None:
     if not model_available():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Risk model not trained. Run ml/predictor/train.py first.",
         )
-
 
 @router.get("/")
 def predict_root():
@@ -52,10 +51,23 @@ def student_dashboard(current_user: CurrentUser):
     return predict_service.student_dashboard(current_user["sub"])
 
 
+def _mentor_section(current_user: dict) -> str | None:
+    # Prefer coordinator_section from DB, fallback to JWT branch if needed
+    try:
+        supabase = get_supabase_client()
+        res = supabase.table("users").select("coordinator_section, branch").eq("id", current_user["sub"]).single().execute()
+        if res.data:
+            cs = res.data.get("coordinator_section") or res.data.get("branch")
+            return cs.strip().upper() if cs else None
+    except Exception:
+        pass
+    return None
+
 @router.get("/students")
 def list_students(_mentor: RequireMentor):
     _ensure_model()
-    return predict_service.list_students()
+    section = _mentor_section(_mentor)
+    return predict_service.list_students(section)
 
 
 @router.get("/students/{student_id}")
@@ -64,13 +76,20 @@ def get_student(student_id: str, _mentor: RequireMentor):
     student = predict_service.get_student(student_id)
     if not student:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found")
+    # Enforce mentor sees only own section
+    sec = _mentor_section(_mentor)
+    if sec and student.get("section"):
+        s = student["section"].upper()
+        if sec not in s and s not in sec:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not in your section")
     return student
 
 
 @router.get("/cohort")
 def cohort_stats(_mentor: RequireMentor):
     _ensure_model()
-    return predict_service.cohort_stats()
+    section = _mentor_section(_mentor)
+    return predict_service.cohort_stats(section)
 
 
 @router.post("/score")
@@ -79,7 +98,6 @@ def score_features(body: ScoreRequest, current_user: CurrentUser):
     features = body.model_dump()
     result = predict_risk(features)
 
-    # Persist the prediction to the risk_scores table
     saved = False
     try:
         from services.supabase_client import get_supabase_client
@@ -101,4 +119,3 @@ def score_features(body: ScoreRequest, current_user: CurrentUser):
         "role": current_user.get("role"),
         "saved_to_db": saved,
     }
-

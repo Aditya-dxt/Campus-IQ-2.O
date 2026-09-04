@@ -34,38 +34,52 @@ def _save_erp_state(user_id: str, erp_id: str, password: str, data: dict):
     """Persist ERP credentials + snapshot so refresh works without re-entering password."""
     supabase = get_supabase_client()
     enc = _encode_pw(password)
-    attendance_pct = float(data["attendance_pct"])
+    attendance_pct = float(data["attendance_pct"]) if data.get("attendance_pct") is not None else None
     avg_marks = data.get("avg_marks_percent")
+    section_raw = data.get("attendance", {}).get("section") or data.get("section")
+    year = None
+    if section_raw:
+        # PSIT-CS-III-M → year III
+        parts = section_raw.strip().upper().split("-")
+        if len(parts) >= 3:
+            year = parts[-2]
     # Try dedicated table first
-    try:
-        supabase.table("erp_credentials").upsert({
-            "user_id": user_id,
-            "erp_id": erp_id.strip(),
-            "erp_password": enc,
-            "last_synced_at": data.get("scraped_at"),
-            "last_attendance_pct": attendance_pct,
-            "last_marks_avg": float(avg_marks) if avg_marks is not None else None,
-        }, on_conflict="user_id").execute()
-    except Exception:
-        pass
-    # Also mirror into student_profiles if columns exist (migration 004)
+    if attendance_pct is not None:
+        try:
+            supabase.table("erp_credentials").upsert({
+                "user_id": user_id,
+                "erp_id": erp_id.strip(),
+                "erp_password": enc,
+                "last_synced_at": data.get("scraped_at"),
+                "last_attendance_pct": attendance_pct,
+                "last_marks_avg": float(avg_marks) if avg_marks is not None else None,
+            }, on_conflict="user_id").execute()
+        except Exception:
+            pass
+    # Also mirror into student_profiles if columns exist (migration 004/005)
     try:
         payload: dict = {
             "user_id": user_id,
-            "attendance_pct": attendance_pct,
             "erp_id": erp_id.strip(),
             "erp_password": enc,
             "erp_last_synced": data.get("scraped_at"),
             "erp_attendance": data.get("attendance", {}),
             "erp_marks": data.get("marks", []),
+            "section": section_raw,
         }
+        if year:
+            payload["year"] = year
+        if attendance_pct is not None:
+            payload["attendance_pct"] = attendance_pct
         if avg_marks is not None:
             payload["past_marks"] = float(avg_marks)
         supabase.table("student_profiles").upsert(payload, on_conflict="user_id").execute()
     except Exception:
         # Fallback without new columns
         try:
-            fallback = {"user_id": user_id, "attendance_pct": attendance_pct}
+            fallback = {"user_id": user_id}
+            if attendance_pct is not None:
+                fallback["attendance_pct"] = attendance_pct
             if avg_marks is not None:
                 fallback["past_marks"] = float(avg_marks)
             supabase.table("student_profiles").upsert(fallback, on_conflict="user_id").execute()
