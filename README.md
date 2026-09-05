@@ -149,53 +149,53 @@ sequenceDiagram
 
 ```mermaid
 erDiagram
-    users ||--o| student_profiles : "1:1 (student)"
+    users ||--o| student_profiles : "1:1 student"
     users ||--o{ interventions : "mentor creates"
-    student_profiles ||--o{ interventions : "1:N (student_id)"
+    student_profiles ||--o{ interventions : "1:N student_id"
     users ||--o{ risk_scores : "student has many"
     users ||--o{ resumes : "uploads"
 
     users {
-        uuid id PK
+        string id PK
         string email UK
         string password_hash
         string name
-        string role "student | mentor"
+        string role
         string branch
-        string coordinator_section "mentor cohort, e.g. CS-III-M"
+        string coordinator_section
         string erp_id
         string erp_password_enc
-        timestamp created_at
+        string created_at
     }
     student_profiles {
-        uuid user_id PK_FK
+        string user_id PK
         float attendance_pct
         float past_marks
         float resume_score
         string year
         string section
-        jsonb marks_by_test
-        timestamp updated_at
+        string marks_by_test
+        string updated_at
     }
     interventions {
-        uuid id PK
-        uuid student_id FK
-        uuid mentor_id FK
+        string id PK
+        string student_id FK
+        string mentor_id FK
         string type
         string notes
         float risk_before
         float risk_after
-        string status "pending | reviewed"
-        date review_date
-        timestamp created_at
+        string status
+        string review_date
+        string created_at
     }
     risk_scores {
-        uuid id PK
-        uuid student_id FK
+        string id PK
+        string student_id FK
         float placement_readiness
         float academic_risk
-        jsonb breakdown
-        timestamp created_at
+        string breakdown
+        string created_at
     }
 ```
 
@@ -390,13 +390,13 @@ Full interactive docs: `http://localhost:8000/docs` (Swagger) and `/redoc`.
 
 ```mermaid
 graph LR
-    A[Anonymous] -->|POST /auth/signup, /auth/login| B[Authenticated]
-    B -->|role=student| S[Student]
-    B -->|role=mentor| M[Mentor]
-    S --> S1[Dashboard, Resume, RAG Chat, Schedule, Interventions (own), Profile, ERP sync]
-    M --> M1[Cohort Overview, Student Detail, Log/Review Interventions, Profile]
-    S -.->|cannot| M1
-    M -.->|cohort isolated| S1
+    A["Anonymous"] -->|"POST /auth/signup or login"| B["Authenticated"]
+    B -->|"role=student"| S["Student"]
+    B -->|"role=mentor"| M["Mentor"]
+    S --> S1["Dashboard Resume RAG Chat Schedule Interventions Profile ERP sync"]
+    M --> M1["Cohort Overview Student Detail Log Review Interventions Profile"]
+    S -.->|"cannot"| M1
+    M -.->|"cohort isolated"| S1
 ```
 
 - **Student** — own dashboard, resume ATS, RAG chat, schedule (check-off progress), intervention history, ERP connect/refresh. Cannot see cohort.
