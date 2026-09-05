@@ -121,10 +121,14 @@ export default function MySchedule() {
       setBlocks(b);
       setTotalHours(data.total_study_hours ?? totalAvailable);
       setHasGenerated(true);
-      // persist for Dashboard preview (per-user) and for reload
+      // persist for Dashboard preview (per-user) and for reload — reset tick progress for new plan
       try {
         const u = JSON.parse(localStorage.getItem("campusiq_user") || "null");
-        if (u?.id) localStorage.setItem(`schedule_cache_${u.id}`, JSON.stringify({ blocks: b, totalHours: data.total_study_hours ?? totalAvailable, at: new Date().toISOString(), detailed_plan: data.detailed_plan }));
+        if (u?.id) {
+          localStorage.setItem(`schedule_cache_${u.id}`, JSON.stringify({ blocks: b, totalHours: data.total_study_hours ?? totalAvailable, at: new Date().toISOString(), detailed_plan: data.detailed_plan }));
+          localStorage.setItem(`schedule_completed_${u.id}`, JSON.stringify({}));
+          window.dispatchEvent(new Event("schedule-completed-updated"));
+        }
       } catch {}
     } catch (e) {
       const msg = e.response?.data?.detail || e.message || "Failed to generate schedule";
@@ -138,13 +142,17 @@ export default function MySchedule() {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-[1280px]">
-      <div>
-        <h1 className="text-2xl font-semibold text-ink">My Schedule</h1>
-        <p className="text-sm text-ink-muted mt-1">Priority: <span className="font-medium text-purple-700">Important + near deadlines</span> → <span className="font-medium text-sky-700">Regular todos</span> → <span className="font-medium text-amber-700">Marks ≤60% (ASG-1/2, CT-1/2)</span> — To-do blocks are <span className="inline-block w-2 h-2 rounded-full bg-purple-500 align-middle" /> purple/sky, marks blocks <span className="inline-block w-2 h-2 rounded-full bg-amber-500 align-middle" /> amber.</p>
-        {predictorHint && <p className="text-xs mt-2 inline-block bg-risk-mid-bg text-risk-mid px-2.5 py-1 rounded-full font-medium">{predictorHint}</p>}
+      <div className="relative overflow-hidden rounded-[24px] bg-gradient-to-br from-violet-600 via-indigo-600 to-cyan-500 p-7 text-white shadow-xl">
+        <img src="https://images.unsplash.com/photo-1506784365847-bbad939e9335?w=1200&q=80&auto=format&fit=crop" alt="" className="absolute inset-0 h-full w-full object-cover opacity-20 mix-blend-overlay" />
+        <div className="relative">
+          <p className="inline-flex rounded-full bg-white/15 backdrop-blur px-3 py-1 text-xs font-bold tracking-widest uppercase border border-white/20">Rule-based · 3-Tier Priority</p>
+          <h1 className="mt-3 text-3xl font-extrabold tracking-tight">My Schedule</h1>
+          <p className="mt-2 text-violet-100 text-sm max-w-2xl">Priority: <span className="font-bold text-white">Important + near deadlines</span> → <span className="font-bold text-white">Regular todos</span> → <span className="font-bold text-amber-200">Marks ≤60%</span> — evening slots from 18:00, slack-aware.</p>
+          {predictorHint && <p className="mt-3 inline-block rounded-full bg-white text-violet-700 px-3 py-1 text-xs font-bold">{predictorHint}</p>}
+        </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-surface-elevated p-5 space-y-5">
+      <div className="rounded-[20px] border border-slate-200 bg-white p-6 space-y-5 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-sm font-semibold text-ink">Plan inputs — enter your real subjects & deadlines</h2>
           <button onClick={handleGenerate} disabled={loading} className="rounded-full bg-primary text-white px-5 py-2 text-sm font-semibold hover:bg-primary-hover disabled:opacity-50 transition-colors shrink-0">

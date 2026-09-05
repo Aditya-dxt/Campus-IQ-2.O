@@ -46,5 +46,6 @@ export function readinessLabel(value) {
 }
 
 export function formatPercent(value) {
+  if (value == null || isNaN(value)) return "—";
   return `${Math.round(value * 100)}%`;
 }

@@ -4,9 +4,9 @@ import Sidebar from "./Sidebar";
 
 export default function AppLayout() {
   return (
-    <div className="min-h-screen bg-surface">
+    <div className="min-h-screen bg-[#f8fafc]">
       <Navbar />
-      <div className="mx-auto flex max-w-7xl gap-0 lg:gap-6 px-4 lg:px-6 py-6">
+      <div className="mx-auto flex max-w-[1440px] gap-6 px-4 lg:px-6 py-6">
         <Sidebar />
         <main className="min-w-0 flex-1">
           <Outlet />

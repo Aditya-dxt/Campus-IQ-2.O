@@ -102,13 +102,26 @@ def _student_record(user: dict, profile: dict | None = None) -> dict | None:
         profile = _fetch_student_profile(user_id)
     if not profile:
         return None
-    features = {name: profile.get(name) for name in FEATURE_NAMES}
-    # If any feature missing, prediction not possible but we still surface attendance/marks for mentor
+    resume_score = _latest_resume_score(user_id)
+    # Build features dict (only attendance/marks matter for new formula, but keep full for compat)
+    enriched = dict(profile)
+    # For placement we only need attendance/past_marks + resume; still fill live counts for future
+    live = _live_counts(user_id)
+    if enriched.get("resume_scans_count") is None and "resume_scans_count" in live:
+        enriched["resume_scans_count"] = live["resume_scans_count"]
+    if enriched.get("career_chat_activity_count") is None and "career_chat_activity_count" in live:
+        enriched["career_chat_activity_count"] = live["career_chat_activity_count"]
+    if enriched.get("mock_interview_score") is None and resume_score is not None:
+        enriched["mock_interview_score"] = int(resume_score)
+    if enriched.get("submission_rate") is None:
+        enriched["submission_rate"] = 70.0
+    if enriched.get("login_frequency") is None:
+        enriched["login_frequency"] = 5
+    # New formula: pass resume_score explicitly
     try:
-        prediction = predict_risk(features) if all(v is not None for v in features.values()) else None
+        prediction = predict_risk(enriched, resume_score=resume_score)
     except Exception:
         prediction = None
-    resume_score = _latest_resume_score(user_id)
     section = profile.get("section")
     if not section and profile.get("erp_attendance"):
         try:
@@ -127,6 +140,7 @@ def _student_record(user: dict, profile: dict | None = None) -> dict | None:
         "academicRisk": prediction["academic_risk"] if prediction else None,
         "placementReadiness": prediction["placement_readiness"] if prediction else None,
         "topFactor": prediction["top_factor"] if prediction else None,
+        "breakdown": prediction["breakdown"] if prediction else None,
         "resumeScore": resume_score,
     }
 
@@ -198,56 +212,47 @@ def _fetch_user(user_id: str) -> dict | None:
 def student_dashboard(user_id: str) -> dict:
     profile = _fetch_student_profile(user_id)
     recent = _latest_study_chat(user_id)
-    live = _live_counts(user_id)
+    resume_score = _latest_resume_score(user_id)
     if profile:
-        # enrich profile with live counts + sensible defaults so model can run after resume/chat
         enriched = dict(profile)
-        if enriched.get("resume_scans_count") is None and "resume_scans_count" in live:
-            enriched["resume_scans_count"] = live["resume_scans_count"]
-        if enriched.get("career_chat_activity_count") is None and "career_chat_activity_count" in live:
-            enriched["career_chat_activity_count"] = live["career_chat_activity_count"]
-        # derive mock_interview_score from latest resume score if missing
-        if enriched.get("mock_interview_score") is None:
-            try:
-                rs = _latest_resume_score(user_id)
-                if rs is not None:
-                    enriched["mock_interview_score"] = int(rs)
-            except Exception:
-                pass
-        # defaults for platform engagement if still null
+        if enriched.get("mock_interview_score") is None and resume_score is not None:
+            enriched["mock_interview_score"] = int(resume_score)
         if enriched.get("submission_rate") is None:
             enriched["submission_rate"] = 70.0
         if enriched.get("login_frequency") is None:
             enriched["login_frequency"] = 5
-        has_real_features = all(enriched.get(name) is not None for name in FEATURE_NAMES)
-        if has_real_features:
-            features = {name: enriched[name] for name in FEATURE_NAMES}
-            try:
-                prediction = predict_risk(features)
-            except Exception:
-                prediction = None
-            if prediction:
-                resume_score = _latest_resume_score(user_id)
-                return {
-                    "resumeScore": resume_score,
-                    "placementReadiness": prediction["placement_readiness"],
-                    "academicRisk": prediction["academic_risk"],
-                    "topFactor": prediction["top_factor"],
-                    "hasData": True,
-                    "attendancePct": float(profile.get("attendance_pct")) if profile.get("attendance_pct") is not None else None,
-                    "pastMarks": float(profile.get("past_marks")) if profile.get("past_marks") is not None else None,
-                    "attendanceUpdatedAt": profile.get("updated_at"),
-                    "year": profile.get("year"),
-                    "section": profile.get("section") or (profile.get("erp_attendance") or {}).get("section"),
-                    "schedulePreview": [],
-                    "recentChat": recent,
-                }
-        resume_score = _latest_resume_score(user_id)
+        # live counts still enrich for completeness
+        live = _live_counts(user_id)
+        if enriched.get("resume_scans_count") is None and "resume_scans_count" in live:
+            enriched["resume_scans_count"] = live["resume_scans_count"]
+        if enriched.get("career_chat_activity_count") is None and "career_chat_activity_count" in live:
+            enriched["career_chat_activity_count"] = live["career_chat_activity_count"]
+        try:
+            prediction = predict_risk(enriched, resume_score=resume_score)
+        except Exception:
+            prediction = None
+        if prediction:
+            return {
+                "resumeScore": resume_score,
+                "placementReadiness": prediction["placement_readiness"],
+                "academicRisk": prediction["academic_risk"],
+                "topFactor": prediction["top_factor"],
+                "breakdown": prediction["breakdown"],
+                "hasData": True,
+                "attendancePct": float(profile.get("attendance_pct")) if profile.get("attendance_pct") is not None else None,
+                "pastMarks": float(profile.get("past_marks")) if profile.get("past_marks") is not None else None,
+                "attendanceUpdatedAt": profile.get("updated_at"),
+                "year": profile.get("year"),
+                "section": profile.get("section") or (profile.get("erp_attendance") or {}).get("section"),
+                "schedulePreview": [],
+                "recentChat": recent,
+            }
         return {
             "resumeScore": resume_score,
             "placementReadiness": None,
             "academicRisk": None,
             "topFactor": None,
+            "breakdown": None,
             "hasData": False,
             "attendancePct": float(profile.get("attendance_pct")) if profile.get("attendance_pct") is not None else None,
             "pastMarks": float(profile.get("past_marks")) if profile.get("past_marks") is not None else None,
@@ -257,12 +262,12 @@ def student_dashboard(user_id: str) -> dict:
             "schedulePreview": [],
             "recentChat": recent,
         }
-    resume_score = _latest_resume_score(user_id)
     return {
         "resumeScore": resume_score,
         "placementReadiness": None,
         "academicRisk": None,
         "topFactor": None,
+        "breakdown": None,
         "hasData": False,
         "attendancePct": None,
         "pastMarks": None,

@@ -2,12 +2,11 @@ import { apiClient } from "./client";
 
 export async function getInterventions(studentId) {
   const { data } = await apiClient.get(`/intervention/list?student_id=${studentId}`);
-  // data.interventions is an array of objects from the DB
-  // map them to match the frontend expectations: id, actionNote, riskBefore, riskAfter, reviewDate, createdAt
   return data.interventions.map((intv) => ({
     id: intv.id,
-    action: "Custom Intervention", // hardcoded since we dropped action category from DB
-    actionNote: intv.action_note,
+    action: (()=>{ const m=intv.action_note.match(/^\[(.*?)\]/); return m?m[1]:"Custom"; })(),
+    actionNote: intv.action_note.replace(/^\[.*?\]\s*/,""),
+    rawNote: intv.action_note,
     riskBefore: intv.risk_before,
     riskAfter: intv.risk_after,
     reviewDate: intv.review_date,
@@ -16,7 +15,6 @@ export async function getInterventions(studentId) {
 }
 
 export async function getInterventionActions() {
-  // Static list of actions for the dropdown
   return [
     { id: "academic_tutoring", label: "Academic Tutoring Session" },
     { id: "counseling", label: "Counseling / Wellness Check" },
@@ -27,28 +25,29 @@ export async function getInterventionActions() {
 }
 
 export async function createIntervention({ studentId, action, actionNote, riskBefore, reviewDate }) {
-  // Backend expects student_id, action_note, review_date
-  // We'll calculate a default reviewDate of +14 days if not provided
   if (!reviewDate) {
-    const d = new Date();
-    d.setDate(d.getDate() + 14);
+    const d = new Date(); d.setDate(d.getDate() + 14);
     reviewDate = d.toISOString().slice(0, 10);
   }
-  
   const { data } = await apiClient.post("/intervention/create", {
     student_id: studentId,
     action_note: `[${action}] ${actionNote}`,
     review_date: reviewDate,
   });
-  
   const intv = data.intervention;
   return {
     id: intv.id,
     action: action,
-    actionNote: intv.action_note,
+    actionNote: intv.action_note.replace(/^\[.*?\]\s*/,""),
+    rawNote: intv.action_note,
     riskBefore: intv.risk_before,
     riskAfter: intv.risk_after,
     reviewDate: intv.review_date,
     createdAt: intv.created_at,
   };
+}
+
+export async function reviewIntervention(interventionId) {
+  const { data } = await apiClient.post("/intervention/review", { intervention_id: interventionId });
+  return data;
 }

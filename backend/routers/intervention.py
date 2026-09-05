@@ -37,25 +37,51 @@ class ReviewInterventionRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Helpers — FIXED: compute risk from live student_profiles via predictor
 # ---------------------------------------------------------------------------
 
 def _get_latest_risk(student_id: str) -> float | None:
-    """Fetch the most recent academic_risk value for a student from the risk_scores table."""
+    """Compute current academic_risk from student_profiles via new placement formula."""
     try:
+        from services.supabase_client import get_supabase_client
+        from services.risk_predictor import predict_risk
+
         supabase = get_supabase_client()
-        resp = (
-            supabase.table("risk_scores")
-            .select("academic_risk")
-            .eq("user_id", student_id)
-            .order("computed_at", desc=True)
-            .limit(1)
-            .execute()
-        )
-        if resp.data:
-            return float(resp.data[0]["academic_risk"])
+        prof = supabase.table("student_profiles").select("attendance_pct, past_marks, mock_interview_score, resume_scans_count, submission_rate, login_frequency, career_chat_activity_count, updated_at").eq("user_id", student_id).limit(1).execute()
+        if not prof.data:
+            return None
+        profile = prof.data[0]
+        # resolve resume_score live (same as predict_service)
+        resume_score = None
+        try:
+            r = supabase.table("resumes").select("score").eq("user_id", student_id).order("created_at", desc=True).limit(1).execute()
+            if r.data and r.data[0].get("score") is not None:
+                resume_score = int(float(r.data[0]["score"]))  # type: ignore[arg-type]
+        except Exception:
+            pass
+        if resume_score is None:
+            v = profile.get("mock_interview_score")
+            if v is not None:
+                try:
+                    resume_score = int(float(v))  # type: ignore[arg-type]
+                except Exception:
+                    resume_score = None
+        features = dict(profile)
+        if resume_score is not None and features.get("mock_interview_score") is None:
+            features["mock_interview_score"] = resume_score
+        result = predict_risk(features, resume_score=resume_score)
+        val = result.get("academic_risk")
+        return float(val) if val is not None else None  # type: ignore[arg-type]
     except Exception as exc:
-        print(f"Warning: could not fetch risk for student {student_id}: {exc}")
+        print(f"Warning: could not compute risk for {student_id}: {exc}")
+        try:
+            from services.supabase_client import get_supabase_client as _gsc
+            supabase2 = _gsc()
+            resp = supabase2.table("risk_scores").select("academic_risk").eq("user_id", student_id).order("computed_at", desc=True).limit(1).execute()
+            if resp.data:
+                return float(resp.data[0]["academic_risk"])  # type: ignore[arg-type]
+        except Exception:
+            pass
     return None
 
 
@@ -81,44 +107,27 @@ def create_intervention(body: CreateInterventionRequest, mentor: RequireMentor):
     """
     Create a new intervention for an at-risk student (mentor only).
 
-    - Snapshots the student's current `academic_risk` as `risk_before`.
-    - Sets `risk_after` to NULL — it will be filled at the `review_date`.
-    - Logs the intervention to the `interventions` table.
+    - Snapshots the student's current `academic_risk` as `risk_before` (computed live).
+    - Sets `risk_after` to NULL — it will be filled at the `review_date` or via manual review.
     """
-    # Validate review_date is in the future
     if body.review_date <= date.today():
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="review_date must be in the future.",
         )
 
-    # Verify the student exists
     supabase = get_supabase_client()
     try:
-        student_resp = (
-            supabase.table("users")
-            .select("id, role")
-            .eq("id", body.student_id)
-            .single()
-            .execute()
-        )
+        student_resp = supabase.table("users").select("id, role").eq("id", body.student_id).single().execute()
         if not student_resp.data or student_resp.data.get("role") != "student":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Student not found or the target user is not a student.",
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student not found or target is not a student.")
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Could not verify student: {exc}",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Could not verify student: {exc}") from exc
 
-    # Snapshot the current risk score
     risk_before = _get_latest_risk(body.student_id)
 
-    # Insert the intervention
     try:
         insert_resp = supabase.table("interventions").insert({
             "student_id": body.student_id,
@@ -129,15 +138,12 @@ def create_intervention(body: CreateInterventionRequest, mentor: RequireMentor):
             "review_date": body.review_date.isoformat(),
         }).execute()
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create intervention: {exc}",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create intervention: {exc}") from exc
 
     return {
         "intervention": insert_resp.data[0] if insert_resp.data else None,
         "risk_before": risk_before,
-        "message": f"Intervention created. Risk will be re-evaluated on {body.review_date}.",
+        "message": f"Intervention created. Risk_before={risk_before}. Risk will be re-evaluated on {body.review_date}.",
     }
 
 
@@ -145,85 +151,44 @@ def create_intervention(body: CreateInterventionRequest, mentor: RequireMentor):
 def list_interventions(student_id: str, current_user: CurrentUser):
     """
     List all interventions for a given student.
-
     - Mentors can view any student.
     - Students can only view their own interventions.
     """
-    # RBAC: Students can only see their own
     if current_user.get("role") == "student" and current_user["sub"] != student_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Students can only view their own interventions.",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Students can only view their own interventions.")
 
     try:
         supabase = get_supabase_client()
-        resp = (
-            supabase.table("interventions")
-            .select("*")
-            .eq("student_id", student_id)
-            .order("created_at", desc=True)
-            .execute()
-        )
+        resp = supabase.table("interventions").select("*").eq("student_id", student_id).order("created_at", desc=True).execute()
         return {"interventions": resp.data or []}
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch interventions: {exc}",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to fetch interventions: {exc}") from exc
 
 
 @router.post("/review")
 def review_intervention(body: ReviewInterventionRequest, mentor: RequireMentor):
     """
     Manually trigger risk_after recomputation for an intervention.
-
-    - Fetches the student's current risk score and writes it to `risk_after`.
+    - Fetches the student's current risk and writes it to `risk_after`.
     - Only works if `risk_after` is currently NULL.
     """
     supabase = get_supabase_client()
-
-    # Fetch the intervention
     try:
-        resp = (
-            supabase.table("interventions")
-            .select("*")
-            .eq("id", body.intervention_id)
-            .single()
-            .execute()
-        )
+        resp = supabase.table("interventions").select("*").eq("id", body.intervention_id).single().execute()
         intervention = resp.data
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Intervention not found: {exc}",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Intervention not found: {exc}") from exc
 
     if not intervention:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Intervention not found.",
-        )
-
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Intervention not found.")
     if intervention.get("risk_after") is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This intervention has already been reviewed.",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This intervention has already been reviewed.")
 
-    # Compute risk_after
     risk_after = _get_latest_risk(intervention["student_id"])
-
-    # Update the record
     try:
-        supabase.table("interventions").update({
-            "risk_after": risk_after,
-        }).eq("id", body.intervention_id).execute()
+        supabase.table("interventions").update({"risk_after": risk_after}).eq("id", body.intervention_id).execute()
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update intervention: {exc}",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update intervention: {exc}") from exc
 
     risk_before = intervention.get("risk_before")
     delta = None
@@ -235,7 +200,6 @@ def review_intervention(body: ReviewInterventionRequest, mentor: RequireMentor):
         "risk_before": risk_before,
         "risk_after": risk_after,
         "delta": delta,
-        "message": "Intervention reviewed successfully." + (
-            f" Risk changed by {delta:+.4f}." if delta is not None else ""
-        ),
+        "improved": delta is not None and delta < 0,
+        "message": "Intervention reviewed successfully." + (f" Risk changed by {delta:+.4f} ({'improved' if delta and delta<0 else 'worsened' if delta and delta>0 else 'no change'})." if delta is not None else ""),
     }

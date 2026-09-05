@@ -92,17 +92,14 @@ export default function Profile() {
     .toUpperCase();
 
   return (
-    <div className="max-w-2xl space-y-8 animate-fade-in">
-      <div className="flex items-center gap-4">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-soft text-primary text-xl font-semibold">
-          {initials}
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold text-ink">{user.name}</h1>
-          <p className="text-sm text-ink-muted">{user.email}</p>
-          <span className="inline-block mt-1 rounded-full bg-accent-soft text-ink-muted px-2.5 py-0.5 text-xs capitalize">
-            {user.role}
-          </span>
+    <div className="max-w-2xl space-y-6 animate-fade-in">
+      <div className="relative overflow-hidden rounded-[24px] bg-gradient-to-br from-indigo-600 to-violet-600 p-6 text-white shadow-xl flex items-center gap-4">
+        <img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=600&q=80&auto=format&fit=crop" alt="" className="absolute inset-0 h-full w-full object-cover opacity-15 mix-blend-overlay" />
+        <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-indigo-600 text-xl font-extrabold shadow shrink-0">{initials}</div>
+        <div className="relative">
+          <h1 className="text-2xl font-extrabold tracking-tight">{user.name}</h1>
+          <p className="text-sm text-indigo-100">{user.email}</p>
+          <span className="inline-block mt-1 rounded-full bg-white text-indigo-700 px-3 py-1 text-xs font-bold capitalize shadow">{user.role} · {user.coordinator_section || user.branch || "PSIT"}</span>
         </div>
       </div>
 
@@ -111,7 +108,7 @@ export default function Profile() {
       )}
 
       {user.role === "student" && summary && !loading && (
-        <div className="rounded-2xl border border-border bg-surface-elevated p-5">
+        <div className="rounded-[20px] border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-medium text-ink mb-3">Score summary</h2>
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
@@ -135,7 +132,7 @@ export default function Profile() {
       )}
 
       {user.role === "mentor" && cohort && !loading && (
-        <div className="rounded-2xl border border-border bg-surface-elevated p-5">
+        <div className="rounded-[20px] border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-medium text-ink mb-3">Cohort at a glance</h2>
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
@@ -156,9 +153,7 @@ export default function Profile() {
         </div>
       )}
 
-      <form
-        onSubmit={handleSave}
-        className="rounded-2xl border border-border bg-surface-elevated p-6 space-y-4"
+      <form onSubmit={handleSave} className="rounded-[20px] border border-slate-200 bg-white p-6 space-y-4 shadow-sm"
       >
         <h2 className="text-base font-medium text-ink">Account details</h2>
         <div>
@@ -226,7 +221,7 @@ export default function Profile() {
         </button>
       </form>
 
-      <div className="rounded-2xl border border-border bg-surface-elevated p-6">
+      <div className="rounded-[20px] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-2 mb-4">
           <Bell className="h-4 w-4 text-ink-muted" />
           <h2 className="text-base font-medium text-ink">Notifications</h2>
