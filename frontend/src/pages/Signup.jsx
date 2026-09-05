@@ -38,12 +38,11 @@ export default function Signup() {
           </Link>
           <div>
             <h1 className="text-4xl font-extrabold text-white leading-tight">One workspace<br />for every student</h1>
-            <p className="mt-3 text-indigo-100 max-w-md">Join with your PSIT ERP once — attendance, marks, year & section sync automatically. Mentors see only their cohort.</p>
+            <p className="mt-3 text-indigo-100 max-w-md">Join with your campus ERP once — attendance, marks, year & section sync automatically. Mentors see only their cohort.</p>
             <div className="mt-6 space-y-2 text-sm text-white/90">
               <p>✓ One-time ERP connect · never asked again</p><p>✓ Resume → RAG Chat → Schedule → Mentor loop</p><p>✓ Offline Phi-3-mini · SHAP explainability</p>
             </div>
           </div>
-          <p className="text-xs text-white/60">26_CS_3M_01 · 6 members · PSIT Kanpur</p>
         </div>
       </div>
 
@@ -78,7 +77,7 @@ export default function Signup() {
             ) : (
               <div className="rounded-2xl bg-white border border-slate-200 p-4 space-y-3">
                 <p className="text-xs font-bold tracking-widest uppercase text-slate-500">Mentor — coordinator assignment</p>
-                <div><label className="block text-sm font-medium text-slate-700 mb-1">Coordinator Year-Section</label><input name="coordinatorSection" required value={form.coordinatorSection} onChange={handleChange} placeholder="CS-III-M  or  PSIT-CS-III-M" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm uppercase focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20" /><p className="text-[11px] text-slate-500 mt-1">You will see only students of this section — strict isolation.</p></div>
+                <div><label className="block text-sm font-medium text-slate-700 mb-1">Coordinator Year-Section</label><input name="coordinatorSection" required value={form.coordinatorSection} onChange={handleChange} placeholder="CS-III-M" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm uppercase focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20" /><p className="text-[11px] text-slate-500 mt-1">You will see only students of this section — strict isolation.</p></div>
                 <div><label className="block text-sm font-medium text-slate-700 mb-1">Department</label><input name="branch" value={form.branch} onChange={handleChange} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm" /></div>
               </div>
             )}
@@ -86,7 +85,7 @@ export default function Signup() {
             <button type="submit" disabled={loading} className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 hover:from-indigo-700 hover:to-violet-700 disabled:opacity-50">
               {loading ? "Creating & syncing ERP…" : "Create account"} <ArrowRight className="h-4 w-4" />
             </button>
-            {loading && form.role==="student" && <p className="text-xs text-slate-500 text-center">Syncing PSIT ERP — may take ~10s</p>}
+            {loading && form.role==="student" && <p className="text-xs text-slate-500 text-center">Syncing ERP — may take ~10s</p>}
           </form>
           <p className="text-center text-sm text-slate-500 mt-6">Already have an account? <Link to="/login" className="font-semibold text-indigo-600">Sign in</Link></p>
         </div>

@@ -35,7 +35,7 @@ export default function Login() {
           </Link>
           <div>
             <h1 className="text-4xl font-extrabold text-white leading-tight">Your academic<br />career copilot</h1>
-            <p className="mt-4 text-indigo-100 max-w-md">Resume scoring · RAG study chat · Risk prediction · Smart weekly planner — all in one role-based workspace for PSIT.</p>
+            <p className="mt-4 text-indigo-100 max-w-md">Resume scoring · RAG study chat · Risk prediction · Smart weekly planner — all in one role-based workspace.</p>
             <div className="mt-8 grid grid-cols-3 gap-3">
               {[{k:"93.4%",l:"Attendance sync"},{k:"77%",l:"Avg marks"},{k:"4 modules",l:"One dashboard"}].map(s=>(
                 <div key={s.l} className="rounded-2xl bg-white/10 backdrop-blur border border-white/20 p-3">
@@ -44,7 +44,6 @@ export default function Login() {
               ))}
             </div>
           </div>
-          <p className="text-xs text-white/60">Project 26_CS_3M_01 · PSIT Kanpur · Prof. Abhay Raj</p>
         </div>
       </div>
 

@@ -99,7 +99,7 @@ export default function Profile() {
         <div className="relative">
           <h1 className="text-2xl font-extrabold tracking-tight">{user.name}</h1>
           <p className="text-sm text-indigo-100">{user.email}</p>
-          <span className="inline-block mt-1 rounded-full bg-white text-indigo-700 px-3 py-1 text-xs font-bold capitalize shadow">{user.role} · {user.coordinator_section || user.branch || "PSIT"}</span>
+          <span className="inline-block mt-1 rounded-full bg-white text-indigo-700 px-3 py-1 text-xs font-bold capitalize shadow">{user.role} · {user.coordinator_section || user.branch || "Campus"}</span>
         </div>
       </div>
 

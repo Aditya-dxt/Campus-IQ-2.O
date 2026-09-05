@@ -31,7 +31,7 @@ export default function Navbar() {
             <div className="hidden sm:flex items-center gap-3 mr-2 pl-3 border-l border-slate-200">
               <div className="text-right hidden md:block">
                 <p className="text-sm font-semibold text-slate-900 leading-none">{user.name}</p>
-                <p className="text-[11px] text-slate-500 capitalize">{user.role} · {user.coordinator_section || user.branch || "PSIT"}</p>
+                <p className="text-[11px] text-slate-500 capitalize">{user.role} · {user.coordinator_section || user.branch || "Campus"}</p>
               </div>
               <div className="h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-sm font-bold shadow">
                 {user.name?.split(" ").map(n=>n[0]).join("").slice(0,2).toUpperCase()}

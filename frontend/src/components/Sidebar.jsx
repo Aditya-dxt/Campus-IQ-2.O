@@ -28,7 +28,7 @@ export default function Sidebar() {
             <Sparkles className="h-4 w-4 text-indigo-200" />
             <span className="text-xs font-bold tracking-widest uppercase text-indigo-100">{user?.role === "mentor" ? "Mentor Workspace" : "Student Workspace"}</span>
           </div>
-          <p className="text-sm font-medium leading-snug">AI-powered academic copilot for PSIT</p>
+          <p className="text-sm font-medium leading-snug">AI-powered academic copilot</p>
           <p className="text-xs text-indigo-100/80 mt-1">Track · Learn · Grow</p>
         </div>
 

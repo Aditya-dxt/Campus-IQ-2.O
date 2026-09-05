@@ -13,7 +13,7 @@ export default function ErpConnectModal({ open, onClose, onConnect }) {
     e.preventDefault();
     setError("");
     if (!erpId.trim() || !password) {
-      setError("Enter your PSIT ERP ID and password.");
+      setError("Enter your ERP ID and password.");
       return;
     }
     setLoading(true);
@@ -39,11 +39,11 @@ export default function ErpConnectModal({ open, onClose, onConnect }) {
           <div className="rounded-xl bg-primary-soft p-2">
             <GraduationCap className="h-5 w-5 text-primary" />
           </div>
-          <h2 className="text-base font-semibold text-ink">Connect PSIT ERP</h2>
+          <h2 className="text-base font-semibold text-ink">Connect ERP</h2>
           <span className="ml-auto rounded-full bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 font-semibold">One-time setup</span>
         </div>
         <p className="text-xs text-ink-muted mb-4">
-          Enter your <span className="font-medium text-ink">erp.psit.ac.in</span> credentials once. We’ll sync your attendance (TL | P | PF | Ab) and marks (ASG-1/2, CT-1/2) — then you can refresh from the dashboard anytime.
+          Enter your <span className="font-medium text-ink">campus ERP</span> credentials once. We’ll sync your attendance and marks — then you can refresh from the dashboard anytime.
         </p>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>

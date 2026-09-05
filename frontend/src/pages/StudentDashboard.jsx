@@ -210,7 +210,7 @@ export default function StudentDashboard() {
                 <RefreshCw className={`h-4 w-4 ${refreshing?"animate-spin":""}`} /> {refreshing?"Refreshing…":"Refresh ERP"}
               </button>
             ) : (
-              <button onClick={()=>setShowErpModal(true)} className="inline-flex items-center gap-2 rounded-xl bg-white text-indigo-700 px-5 py-2.5 text-sm font-bold shadow hover:bg-indigo-50"><GraduationCap className="h-4 w-4" /> Connect PSIT ERP</button>
+              <button onClick={()=>setShowErpModal(true)} className="inline-flex items-center gap-2 rounded-xl bg-white text-indigo-700 px-5 py-2.5 text-sm font-bold shadow hover:bg-indigo-50"><GraduationCap className="h-4 w-4" /> Connect ERP</button>
             )}
           </div>
         </div>
@@ -260,7 +260,7 @@ export default function StudentDashboard() {
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
               <span className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center text-white"><Award className="h-5 w-5" /></span>
-              <div><h2 className="text-base font-bold text-slate-900">Marks by test (ERP)</h2><p className="text-xs text-slate-500">Live from PSIT — new tests appear after Refresh</p></div>
+              <div><h2 className="text-base font-bold text-slate-900">Marks by test (ERP)</h2><p className="text-xs text-slate-500">Live from ERP — new tests appear after Refresh</p></div>
             </div>
             <div className="flex items-center gap-2">
               <label className="text-xs font-semibold text-slate-600">Test</label>
@@ -290,7 +290,7 @@ export default function StudentDashboard() {
       ) : (
         <section className="rounded-[20px] border-2 border-dashed border-slate-200 bg-white p-8 text-center">
           <img src="https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=300&q=80&auto=format&fit=crop" alt="" className="h-20 w-20 rounded-2xl object-cover mx-auto mb-3" />
-          <p className="text-sm font-bold text-slate-900">No ERP marks yet</p><p className="text-xs text-slate-500 mt-1">Hit Connect PSIT ERP — CT-1 / ASG-1 and future tests will appear here.</p>
+          <p className="text-sm font-bold text-slate-900">No ERP marks yet</p><p className="text-xs text-slate-500 mt-1">Hit Connect ERP — CT-1 / ASG-1 and future tests will appear here.</p>
         </section>
       )}
 
