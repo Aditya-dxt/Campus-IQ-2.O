@@ -73,7 +73,7 @@ export default function Home() {
             <a href="#how" className="hover:text-slate-900">How it works</a>
             <a href="#roles" className="hover:text-slate-900">Roles</a>
             <span className="h-4 w-px bg-slate-200" />
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Live at PSIT Kanpur</span>
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Secure & private</span>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -114,7 +114,7 @@ export default function Home() {
               for every student.
             </h1>
             <p className="mt-4 text-[15px] lg:text-[17px] leading-relaxed text-slate-600 max-w-[560px]">
-              CampusIQ syncs your <b className="text-slate-900">PSIT ERP once</b> — attendance, marks, year &amp; section — then turns it into resume scoring, RAG study chat, placement-risk radar and a smart weekly planner. Mentors see only their section.
+              CampusIQ syncs your <b className="text-slate-900">campus ERP once</b> — attendance, marks, year &amp; section — then turns it into resume scoring, RAG study chat, placement-risk radar and a smart weekly planner. Mentors see only their section.
             </p>
 
             <div className="mt-7 flex flex-wrap gap-3">
@@ -207,7 +207,7 @@ export default function Home() {
                   <div className="col-span-2 rounded-2xl bg-slate-900 text-white p-3 flex flex-col">
                     <p className="text-xs font-bold flex items-center gap-1.5"><MessageCircle className="h-3.5 w-3.5 text-violet-300" /> RAG Study Chat</p>
                     <div className="mt-3 space-y-2 text-xs leading-relaxed">
-                      <div className="rounded-xl bg-white/10 px-3 py-2">Explain DBMS normalisation with PSIT notes?</div>
+                      <div className="rounded-xl bg-white/10 px-3 py-2">Explain DBMS normalisation from my notes?</div>
                       <div className="rounded-xl bg-indigo-500 px-3 py-2">1NF → 2NF → 3NF reduces redundancy… (cited from your uploaded notes)</div>
                     </div>
                     <div className="mt-auto flex items-center gap-1.5 text-[11px] text-white/60"><Zap className="h-3 w-3" /> Phi-3-mini offline</div>
@@ -234,7 +234,7 @@ export default function Home() {
               <div className="h-9 w-9 rounded-xl bg-emerald-50 grid place-items-center text-emerald-600"><CheckCircle2 className="h-5 w-5" /></div>
               <div>
                 <p className="text-xs font-bold">ERP synced</p>
-                <p className="text-[11px] text-slate-500">2401640100073 · CS-III-M</p>
+                <p className="text-[11px] text-slate-500">Verified · Live sync</p>
               </div>
               <span className="ml-2 h-2 w-2 rounded-full bg-emerald-500" />
             </div>
@@ -255,11 +255,11 @@ export default function Home() {
             <span className="font-bold tracking-widest uppercase text-slate-400">Trusted at</span>
             <span className="h-3 w-px bg-slate-200 hidden sm:block" />
             <div className="flex flex-wrap gap-2">
-              {["PSIT Kanpur · CS-III-M", "ERP Live Sync", "Mentor-section isolation", "SHAP explainability", "Chroma RAG", "Offline LLM"].map((t) => (
+              {["ERP Live Sync", "Mentor-section isolation", "SHAP explainability", "Chroma RAG", "Offline LLM", "ATS Resume Score"].map((t) => (
                 <span key={t} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-semibold text-slate-700">{t}</span>
               ))}
             </div>
-            <span className="ml-auto hidden lg:inline-flex items-center gap-1.5 text-slate-500"><Star className="h-3.5 w-3.5 text-amber-500" /> Built for SIH & production</span>
+            <span className="ml-auto hidden lg:inline-flex items-center gap-1.5 text-slate-500"><Star className="h-3.5 w-3.5 text-amber-500" /> Production-ready</span>
           </div>
         </div>
       </section>
@@ -355,7 +355,7 @@ export default function Home() {
             <div className="h-12 w-12 rounded-xl bg-indigo-50 grid place-items-center text-indigo-600"><Users className="h-6 w-6" /></div>
             <div>
               <h4 className="font-extrabold">Mentor console — section-isolated</h4>
-              <p className="text-sm text-slate-600">Mentors pick a Year-Section (CS-III-M) and see <i>only</i> that cohort. Risk table + nudges.</p>
+              <p className="text-sm text-slate-600">Mentors pick a Year-Section and see <i>only</i> that cohort. Risk table + nudges.</p>
             </div>
           </div>
           <div className="lg:col-span-6 rounded-[24px] border border-slate-200 bg-white p-6 flex items-center gap-4">
@@ -377,7 +377,7 @@ export default function Home() {
           </div>
           <div className="mt-8 grid lg:grid-cols-4 gap-4">
             {[
-              { n: "01", t: "Connect ERP once", d: "Student enters PSIT Roll + password at signup. We fetch year, section, attendance, marks.", icon: Shield },
+              { n: "01", t: "Connect ERP once", d: "Student enters campus ERP ID + password at signup. We fetch year, section, attendance, marks.", icon: Shield },
               { n: "02", t: "Resume → Chat", d: "Upload resume for scoring; chat with your own notes via offline RAG.", icon: FileSearch },
               { n: "03", t: "Risk + Schedule", d: "ML predicts placement risk (SHAP) and auto-builds a tiered weekly plan.", icon: BarChart3 },
               { n: "04", t: "Mentor nudges", d: "Mentor sees only their section, sends interventions; student checks off & closes the loop.", icon: Users },
@@ -414,7 +414,7 @@ export default function Home() {
               <div className="inline-flex items-center gap-2 rounded-full bg-white/15 border border-white/20 px-3 py-1 text-xs font-bold"><Users className="h-3.5 w-3.5" /> For Mentors</div>
               <h3 className="mt-4 text-[22px] font-extrabold">Only your cohort. Zero noise.</h3>
               <ul className="mt-4 space-y-2.5 text-sm text-violet-50">
-                {["Pick Year-Section (e.g. CS-III-M) — strict isolation", "Risk table sorted by need: high → mid → low", "One-click nudges + intervention log", "Student detail drawer with SHAP drivers"].map((t) => (
+                {["Pick Year-Section — strict isolation", "Risk table sorted by need: high → mid → low", "One-click nudges + intervention log", "Student detail drawer with SHAP drivers"].map((t) => (
                   <li key={t} className="flex gap-2"><CheckCircle2 className="h-4 w-4 text-white mt-0.5 shrink-0" /> <span>{t}</span></li>
                 ))}
               </ul>
@@ -447,8 +447,8 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-lg bg-slate-900 grid place-items-center text-white"><GraduationCap className="h-4 w-4" /></div>
             <div>
-              <p className="font-bold leading-none">CampusIQ — Project 26_CS_3M_01</p>
-              <p className="text-xs text-slate-500">PSIT Kanpur · SIH 2026 · Offline-first AI copilot</p>
+              <p className="font-bold leading-none">CampusIQ</p>
+              <p className="text-xs text-slate-500">Offline-first AI copilot · Secure by design</p>
             </div>
           </div>
           <div className="flex items-center gap-4 text-slate-500 text-xs">
